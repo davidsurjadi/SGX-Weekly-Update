@@ -316,8 +316,6 @@ let activeSectors = new Set();
 let activeTypes = new Set(['institutional', 'retail']);
 
 function computeDefaultSectors() {
-  // Pre-select the 3 highest-magnitude sectors (over the current range) so the chart isn't
-  // cluttered with all 12 lines on first load. User can add/remove sectors via the chips.
   const cw = currentWeeksList();
   const magnitude = {};
   sectorNames.forEach(s => {
@@ -483,8 +481,6 @@ function selectTicker(code) {
   const history = DATA.records.filter(r => r.stock_code === code).sort((a,b)=> a.week_start.localeCompare(b.week_start));
   const priceSnaps = (DATA.daily_momentum || []).filter(r => r.stock_code === code).sort((a,b)=> a.report_date.localeCompare(b.report_date));
 
-  // Weekly price/volume sourced from Yahoo Finance: Friday close (or the last trading
-  // day of the week if Friday was a holiday) as the week's price, volume summed over the week.
   const priceByWeek = {};
   (DATA.weekly_prices || []).filter(r => r.stock_code === code).forEach(r => {
     priceByWeek[r.week_start] = { avgPrice: r.close, volume: Math.round(r.volume / 1000) };
@@ -512,7 +508,6 @@ function selectTicker(code) {
     </table>`;
   }
 
-  // Bottom weekly table + chart are scoped to the selected time-range filter.
   const weeksForTicker = [...new Set(history.map(h => h.week_start))].filter(w => cw.includes(w)).sort((a, b) => b.localeCompare(a));
 
   function weekChangePct(weekStart) {
@@ -537,8 +532,6 @@ function selectTicker(code) {
     return `<div class="${cls}">${fmt(val)}</div>${impliedLine}`;
   }
 
-  // ---- Analysis: signal, rolling windows, market-cap normalization, short-sell, shareholder disclosures ----
-  // These reflect the latest tracked state and are intentionally NOT scoped to the range filter.
   const sigHistory = DATA.signals && DATA.signals[code] ? DATA.signals[code] : [];
   const latestSig = sigHistory.length ? sigHistory[sigHistory.length - 1] : null;
   const sigDef = latestSig && DATA.signal_definitions ? DATA.signal_definitions[latestSig.signal] : null;
@@ -741,4 +734,7 @@ async function loadDashboard() {
   renderStreakTable('streak-sell-table', 'sell');
   renderDivergenceTable();
 }
-loadDashboa
+loadDashboard();
+</script>
+</body>
+</html>
