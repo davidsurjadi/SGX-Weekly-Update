@@ -99,6 +99,10 @@ header.top .sub { font-size:12px; color: rgba(255,255,255,0.65); margin-top:4px;
 .mini-list .item a:hover { text-decoration:underline; }
 .tag { display:inline-block; font-size:10.5px; padding:1px 7px; border-radius:8px; background:#eef0f3; color:var(--neutral); margin-left:6px; }
 .empty-state { color: var(--text-secondary); font-size:13px; padding: 40px; text-align:center; }
+.filter-label { font-size:10.5px; color:var(--text-secondary); font-weight:600; text-transform:uppercase; letter-spacing:.03em; margin-bottom:6px; }
+.chip-row { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
+.chip-btn { border:1px solid var(--border); background:#fff; color:var(--text-primary); padding:5px 12px; border-radius:14px; font-size:11.5px; font-weight:600; cursor:pointer; }
+.chip-btn.type-chip.active { background:#334155; border-color:#334155; color:#fff; }
 footer { text-align:center; color: var(--text-secondary); font-size:12px; padding: 20px 0; }
 </style>
 </head>
@@ -122,15 +126,19 @@ footer { text-align:center; color: var(--text-secondary); font-size:12px; paddin
   <!-- OVERVIEW -->
   <div class="tabpage active" id="tab-overview">
     <div class="kpi-row" id="kpi-row"></div>
-    <div class="chart-row">
-      <div class="card">
-        <h3>Overall Net Flow — Institutional vs Retail (S$M / week)</h3>
-        <canvas id="trend-chart"></canvas>
-      </div>
-      <div class="card">
-        <h3 id="sector-chart-title">Sector Flow (S$M)</h3>
-        <canvas id="sector-chart"></canvas>
-      </div>
+    <div class="card" style="margin-bottom: var(--gap);">
+      <h3>Overall Net Flow — Institutional vs Retail (S$M / week)</h3>
+      <canvas id="trend-chart"></canvas>
+    </div>
+    <div class="card" style="margin-bottom: var(--gap);">
+      <h3 id="sector-chart-title">Sector Flow Trend (S$M / week)</h3>
+      <div style="font-size:11px; color:var(--text-secondary); margin:-8px 0 12px 0;">Solid = Institutional · Dashed = Retail. Click a legend entry to hide/show that line.</div>
+      <div class="filter-label">Sectors</div>
+      <div class="chip-row" id="sector-chips"></div>
+      <div class="filter-label">Investor Type</div>
+      <div class="chip-row" id="type-chips"></div>
+      <canvas id="sector-chart" style="max-height:340px;"></canvas>
+      <div id="sector-chart-empty" class="empty-state" style="display:none;">Select at least one sector and one investor type to see data.</div>
     </div>
     <div class="table-grid">
       <div class="card">
@@ -301,39 +309,109 @@ function renderTrendChart() {
   });
 }
 
-// ---- Sector chart: sum over the selected range (was: latest week only) ----
+// ---- Sector chart: per-week trend, filterable by sector and by investor type ----
 const sectorNames = ["Consumer Cyclicals","Consumer Non-Cyclicals","Energy/Oil & Gas","Financial Services","Health care","Industrials","Materials & Resources","Real Estate (excl REITs)","REITs","Technology (Hardware/Software)","Telcos","Utilities"];
-function sumSector(cw, investorType, sector) {
-  let total = 0, covered = 0;
-  cw.forEach(w => {
-    const r = DATA.sector_flow.find(x => x.week_date === w && x.investor_type === investorType);
-    if (r && r[sector] !== null && r[sector] !== undefined) { total += r[sector]; covered++; }
+const SECTOR_COLORS = ["#1f6feb","#d1373f","#1a8754","#f59e0b","#8b5cf6","#0aa392","#e879f9","#64748b","#0891b2","#ea580c","#65a30d","#db2777"];
+let activeSectors = new Set();
+let activeTypes = new Set(['institutional', 'retail']);
+
+function computeDefaultSectors() {
+  // Pre-select the 3 highest-magnitude sectors (over the current range) so the chart isn't
+  // cluttered with all 12 lines on first load. User can add/remove sectors via the chips.
+  const cw = currentWeeksList();
+  const magnitude = {};
+  sectorNames.forEach(s => {
+    let m = 0;
+    cw.forEach(w => {
+      const ri = DATA.sector_flow.find(x => x.week_date === w && x.investor_type === 'institutional');
+      const rr = DATA.sector_flow.find(x => x.week_date === w && x.investor_type === 'retail');
+      if (ri && ri[s] != null) m += Math.abs(ri[s]);
+      if (rr && rr[s] != null) m += Math.abs(rr[s]);
+    });
+    magnitude[s] = m;
   });
-  return covered ? Math.round(total*10)/10 : null;
+  return new Set(sectorNames.slice().sort((a, b) => magnitude[b] - magnitude[a]).slice(0, 3));
 }
+
+function renderSectorChips() {
+  const sectorChipsEl = document.getElementById('sector-chips');
+  const typeChipsEl = document.getElementById('type-chips');
+
+  sectorChipsEl.innerHTML = '';
+  sectorNames.forEach((s, si) => {
+    const active = activeSectors.has(s);
+    const btn = document.createElement('button');
+    btn.className = 'chip-btn';
+    btn.textContent = s;
+    btn.style.borderColor = active ? SECTOR_COLORS[si] : '';
+    btn.style.background = active ? SECTOR_COLORS[si] : '';
+    btn.style.color = active ? '#fff' : '';
+    btn.addEventListener('click', () => {
+      if (activeSectors.has(s)) activeSectors.delete(s); else activeSectors.add(s);
+      renderSectorChips();
+      renderSectorChart();
+    });
+    sectorChipsEl.appendChild(btn);
+  });
+
+  typeChipsEl.innerHTML = '';
+  [['institutional', 'Institutional'], ['retail', 'Retail']].forEach(([key, label]) => {
+    const active = activeTypes.has(key);
+    const btn = document.createElement('button');
+    btn.className = 'chip-btn type-chip' + (active ? ' active' : '');
+    btn.textContent = label;
+    btn.addEventListener('click', () => {
+      if (activeTypes.has(key)) activeTypes.delete(key); else activeTypes.add(key);
+      renderSectorChips();
+      renderSectorChart();
+    });
+    typeChipsEl.appendChild(btn);
+  });
+}
+
 function renderSectorChart() {
   const cw = currentWeeksList();
   const titleEl = document.getElementById('sector-chart-title');
-  if (cw.length) {
-    titleEl.textContent = `Sector Flow — Sum (S$M), ${cw.length} wk${cw.length===1?'':'s'} (${cw[0]} → ${cw[cw.length-1]})`;
-  } else {
-    titleEl.textContent = 'Sector Flow (S$M)';
+  const canvasEl = document.getElementById('sector-chart');
+  const emptyEl = document.getElementById('sector-chart-empty');
+  titleEl.textContent = cw.length
+    ? `Sector Flow Trend (S$M / week), ${cw.length} wk${cw.length === 1 ? '' : 's'} (${cw[0]} → ${cw[cw.length - 1]})`
+    : 'Sector Flow Trend (S$M / week)';
+
+  const datasets = [];
+  sectorNames.forEach((s, si) => {
+    if (!activeSectors.has(s)) return;
+    if (activeTypes.has('institutional')) {
+      datasets.push({
+        label: `${s} (Inst)`,
+        data: cw.map(w => { const r = DATA.sector_flow.find(x => x.week_date === w && x.investor_type === 'institutional'); return r && r[s] != null ? r[s] : null; }),
+        borderColor: SECTOR_COLORS[si], backgroundColor: SECTOR_COLORS[si], borderWidth: 2, borderDash: [], tension: 0.25, pointRadius: 0, pointHoverRadius: 4,
+      });
+    }
+    if (activeTypes.has('retail')) {
+      datasets.push({
+        label: `${s} (Retail)`,
+        data: cw.map(w => { const r = DATA.sector_flow.find(x => x.week_date === w && x.investor_type === 'retail'); return r && r[s] != null ? r[s] : null; }),
+        borderColor: SECTOR_COLORS[si], backgroundColor: SECTOR_COLORS[si], borderWidth: 2, borderDash: [5, 3], tension: 0.25, pointRadius: 0, pointHoverRadius: 4,
+      });
+    }
+  });
+
+  if (!datasets.length) {
+    canvasEl.style.display = 'none';
+    emptyEl.style.display = 'block';
+    if (sectorChart) { sectorChart.destroy(); sectorChart = null; }
+    return;
   }
-  const instData = sectorNames.map(s => sumSector(cw, 'institutional', s));
-  const retailData = sectorNames.map(s => sumSector(cw, 'retail', s));
+  canvasEl.style.display = 'block';
+  emptyEl.style.display = 'none';
   if (sectorChart) sectorChart.destroy();
-  sectorChart = new Chart(document.getElementById('sector-chart').getContext('2d'), {
-    type: 'bar',
-    data: {
-      labels: sectorNames.map(s => s.length > 14 ? s.slice(0,13)+'…' : s),
-      datasets: [
-        { label:'Institutional', data: instData, backgroundColor:'#1f6feb' },
-        { label:'Retail', data: retailData, backgroundColor:'#d1373f' },
-      ]
-    },
-    options: { responsive:true, maintainAspectRatio:false, indexAxis:'y',
-      plugins:{legend:{position:'top', labels:{usePointStyle:true}}},
-      scales:{ x:{ ticks:{ callback:(v)=>`${v}m` } } } }
+  sectorChart = new Chart(canvasEl.getContext('2d'), {
+    type: 'line',
+    data: { labels: cw, datasets },
+    options: { responsive:true, maintainAspectRatio:false, interaction:{mode:'nearest', intersect:false},
+      plugins:{legend:{position:'bottom', labels:{usePointStyle:true, boxWidth:10, font:{size:10.5}}}},
+      scales:{ x:{ ticks:{ maxTicksLimit: 10 }, grid:{display:false} }, y:{ ticks:{ callback:(v)=>`${v}m` } } } }
   });
 }
 
@@ -648,6 +726,8 @@ async function loadDashboard() {
   updateRangeNote();
   renderKpis();
   renderTrendChart();
+  activeSectors = computeDefaultSectors();
+  renderSectorChips();
   renderSectorChart();
   renderTopTable('inst-table', 'institutional');
   renderTopTable('retail-table', 'retail');
