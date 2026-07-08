@@ -408,7 +408,7 @@ function renderSectorChart() {
     type: 'line',
     data: { labels: cw, datasets },
     options: { responsive:true, maintainAspectRatio:false, interaction:{mode:'nearest', intersect:false},
-      plugins:{legend:{position:'bottom', labels:{usePointStyle:true, pointStyle:'line', boxWidth:26, boxHeight:2, font:{size:10.5}}}},
+      plugins:{legend:{position:'bottom', labels:{usePointStyle:true, pointStyle:'line', pointStyleWidth:56, boxHeight:5, font:{size:11}}}},
       scales:{ x:{ ticks:{ maxTicksLimit: 10 }, grid:{display:false} }, y:{ ticks:{ callback:(v)=>`${v}m` } } } }
   });
 }
