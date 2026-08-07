@@ -11,7 +11,20 @@ Usage:
 
 import os
 import sys
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
+
+SG_TZ = timezone(timedelta(hours=8))
+
+
+def next_monday_sgt_str() -> str:
+    """Return the date of the next Monday run, e.g. 'Monday, 10 Aug 2026, 11:59 PM SGT'."""
+    now_sg = datetime.now(timezone.utc).astimezone(SG_TZ)
+    days_ahead = (7 - now_sg.weekday()) % 7  # Monday == 0
+    if days_ahead == 0:
+        days_ahead = 7  # today is Monday and this run already happened; next one is in 7 days
+    next_monday = now_sg + timedelta(days=days_ahead)
+    return next_monday.strftime("%A, %d %b %Y") + ", 11:59 PM SGT"
 
 
 class TelegramNotifier:
@@ -79,7 +92,7 @@ class TelegramNotifier:
 <b>File sizes:</b>
 {size_str}
 
-Next update: Monday 9 AM SGT
+Next update: {next_monday_sgt_str()}
 """
         self.send_message(msg)
 
