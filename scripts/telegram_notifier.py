@@ -5,7 +5,7 @@ Send Telegram notifications for SGX pipeline events.
 Usage:
     notifier = TelegramNotifier(token, chat_id)
     notifier.send_start()
-    notifier.send_success(week_start, new_rows, file_sizes)
+    notifier.send_success(week_start, total_weeks, ticker_count)
     notifier.send_failure(step, error_msg)
 """
 
@@ -15,6 +15,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 
 SG_TZ = timezone(timedelta(hours=8))
+DASHBOARD_URL = os.getenv("DASHBOARD_URL", "https://davidsurjadi.github.io/SGX-Weekly-Update/")
+
+
+def now_sgt_str() -> str:
+    """Return the current time in SGT, e.g. '07 Aug 2026, 10:09 AM SGT'."""
+    now_sg = datetime.now(timezone.utc).astimezone(SG_TZ)
+    return now_sg.strftime("%d %b %Y, %I:%M %p") + " SGT"
 
 
 def next_monday_sgt_str() -> str:
@@ -78,26 +85,22 @@ class TelegramNotifier:
 
     def send_start(self):
         """Notify that pipeline is starting."""
-        msg = "🚀 <b>SGX Weekly Update Started</b>\n\nDownloading latest report..."
+        msg = f"""🚀 <b>SGX Fund Flow Update Started</b>
+
+⏰ {now_sgt_str()}
+Fetching the latest report..."""
         self.send_message(msg)
 
-    def send_success(self, week_start: str, new_rows: int = 0, file_sizes: Dict[str, int] = None):
-        """Notify successful completion with stats."""
-        file_sizes = file_sizes or {}
+    def send_success(self, week_start: str, total_weeks: int = 0, ticker_count: int = 0):
+        """Notify successful completion with stats and a link to the live dashboard."""
+        msg = f"""✅ <b>SGX Fund Flow Dashboard Updated</b>
 
-        size_str = "\n".join([f"  {name}: {size / 1024 / 1024:.1f} MB" for name, size in file_sizes.items()])
+📅 Week of {week_start}
+📊 {total_weeks} weeks tracked · {ticker_count} tickers
 
-        msg = f"""✅ <b>SGX Weekly Update Complete</b>
+🔗 <a href="{DASHBOARD_URL}">View Dashboard</a>
 
-<b>Week:</b> {week_start}
-<b>New rows:</b> {new_rows}
-<b>Dashboard:</b> Published to GitHub Pages
-
-<b>File sizes:</b>
-{size_str}
-
-Next update: {next_monday_sgt_str()}
-"""
+⏰ Next update: {next_monday_sgt_str()}"""
         self.send_message(msg)
 
     def send_failure(self, step: str, error_msg: str):
@@ -116,4 +119,4 @@ if __name__ == '__main__':
     # Test mode
     notifier = TelegramNotifier()
     notifier.send_start()
-    notifier.send_success("2026-07-27", new_rows=40, file_sizes={"data.json": 4500000, "index.html": 42000})
+    notifier.send_success("2026-07-27", total_weeks=159, ticker_count=137)

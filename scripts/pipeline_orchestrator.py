@@ -49,14 +49,6 @@ def run_command(cmd, cwd=None, env=None):
         return 1, "", str(e)
 
 
-def get_file_size_mb(filepath):
-    """Get file size in MB."""
-    try:
-        return os.path.getsize(filepath) / 1024 / 1024
-    except:
-        return 0
-
-
 def main():
     """Main orchestration."""
     notifier = TelegramNotifier()
@@ -70,7 +62,8 @@ def main():
     notifier.send_start()
 
     week_start = None
-    new_rows = 0
+    total_weeks = 0
+    ticker_count = 0
 
     try:
         # ============ STEP 1: Download ============
@@ -105,13 +98,6 @@ def main():
         if rc != 0:
             raise Exception(f"parse_reports.py failed:\n{stderr}")
 
-        # Extract stats from stdout
-        if "weekly_top10 rows:" in stdout:
-            try:
-                new_rows = int(stdout.split("weekly_top10 rows:")[1].split()[0])
-            except:
-                pass
-
         # ============ STEP 3: Build Ticker Summary ============
         print("\n" + "=" * 60)
         print("STEP 3: Build Ticker Summary")
@@ -127,6 +113,19 @@ def main():
         print(stdout)
         if rc != 0:
             raise Exception(f"build_ticker_summary.py failed:\n{stderr}")
+
+        # Extract real dataset stats for the notification (e.g. "weeks=159 tickers=137 ...")
+        for token in stdout.split():
+            if token.startswith("weeks="):
+                try:
+                    total_weeks = int(token.split("=", 1)[1])
+                except ValueError:
+                    pass
+            elif token.startswith("tickers="):
+                try:
+                    ticker_count = int(token.split("=", 1)[1])
+                except ValueError:
+                    pass
 
         # ============ STEP 4: Render Dashboard ============
         print("\n" + "=" * 60)
@@ -187,12 +186,7 @@ def main():
         print("SUCCESS: All steps completed")
         print("=" * 60)
 
-        file_sizes = {
-            "data.json": get_file_size_mb(data_dir / "dashboard_data.json"),
-            "index.html": get_file_size_mb("index.html"),
-        }
-
-        notifier.send_success(week_start or "unknown", new_rows, file_sizes)
+        notifier.send_success(week_start or "unknown", total_weeks, ticker_count)
         return 0
 
     except Exception as e:
