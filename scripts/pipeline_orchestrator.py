@@ -173,7 +173,10 @@ def main():
                 if rc == 0:
                     print("✅ Pushed to GitHub")
                 else:
-                    print(f"WARNING: git push failed (non-critical): {stderr}")
+                    # This must be treated as a hard failure: a "successful" run that
+                    # can't push is worse than a visible failure, since it silently
+                    # discards the update and reports green.
+                    raise Exception(f"git push failed: {stderr}")
             else:
                 print("INFO: No changes to commit")
         else:

@@ -18,13 +18,17 @@ SG_TZ = timezone(timedelta(hours=8))
 
 
 def next_monday_sgt_str() -> str:
-    """Return the date of the next Monday run, e.g. 'Monday, 10 Aug 2026, 11:59 PM SGT'."""
+    """Return the date of the next scheduled run, e.g. 'Tuesday, 11 Aug 2026, 8:00 AM SGT'.
+
+    Kept the old function name so callers don't need to change; the schedule
+    itself runs Tuesday 8:00 AM SGT (see .github/workflows/sgx-weekly-update.yml).
+    """
     now_sg = datetime.now(timezone.utc).astimezone(SG_TZ)
-    days_ahead = (7 - now_sg.weekday()) % 7  # Monday == 0
+    days_ahead = (1 - now_sg.weekday()) % 7  # Tuesday == 1
     if days_ahead == 0:
-        days_ahead = 7  # today is Monday and this run already happened; next one is in 7 days
-    next_monday = now_sg + timedelta(days=days_ahead)
-    return next_monday.strftime("%A, %d %b %Y") + ", 11:59 PM SGT"
+        days_ahead = 7  # today is Tuesday and this run already happened; next one is in 7 days
+    next_run = now_sg + timedelta(days=days_ahead)
+    return next_run.strftime("%A, %d %b %Y") + ", 8:00 AM SGT"
 
 
 class TelegramNotifier:

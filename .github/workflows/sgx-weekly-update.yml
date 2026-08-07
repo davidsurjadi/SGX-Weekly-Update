@@ -12,6 +12,13 @@ on:
   # Allow manual trigger for testing
   workflow_dispatch:
 
+# The default GITHUB_TOKEN is read-only unless granted write access here.
+# Without this, every push silently fails with 403 (caught as a "non-critical"
+# warning by pipeline_orchestrator.py), so the job reports SUCCESS even though
+# nothing actually reaches the repo.
+permissions:
+  contents: write
+
 jobs:
   update:
     runs-on: ubuntu-latest
