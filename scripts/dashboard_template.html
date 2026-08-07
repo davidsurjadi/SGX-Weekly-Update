@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SGX Fund Flow Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous"></script>
+<style>
+:root {
+  --bg-primary: #f4f6f8;
+  --bg-card: #ffffff;
+  --bg-header: #0b1f3a;
+  --text-primary: #1a2233;
+  --text-secondary: #667085;
+  --text-on-dark: #ffffff;
+  --accent: #1f6feb;
+  --positive: #1a8754;
+  --negative: #d1373f;
+  --neutral: #6c757d;
+  --border: #e5e9ef;
+  --radius: 10px;
+  --gap: 16px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg-primary); color: var(--text-primary); line-height:1.5; }
+.container { max-width: 1400px; margin: 0 auto; padding: var(--gap); }
+header.top { background: var(--bg-header); color: var(--text-on-dark); padding: 20px 24px; border-radius: var(--radius); margin-bottom: var(--gap); display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; }
+header.top h1 { font-size: 20px; font-weight:600; }
+header.top .sub { font-size:12px; color: rgba(255,255,255,0.65); margin-top:4px; }
+header.top .last-updated { font-size:11px; color: rgba(255,255,255,0.65); text-align:right; white-space:nowrap; }
+.tabs { display:flex; gap:8px; }
+.tab-btn { background: rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.2); color: var(--text-on-dark); padding:8px 16px; border-radius:6px; cursor:pointer; font-size:13px; }
+.tab-btn.active { background: var(--accent); border-color: var(--accent); }
+.tabpage { display:none; }
+.tabpage.active { display:block; }
+
+.filter-bar { display:flex; align-items:center; gap:8px; margin-bottom: var(--gap); flex-wrap:wrap; background: var(--bg-card); border:1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; }
+.filter-bar .flabel { font-size:12px; color:var(--text-secondary); margin-right:2px; font-weight:600; }
+.range-btn { background: var(--bg-primary); border:1px solid var(--border); color: var(--text-primary); padding:6px 14px; border-radius:6px; cursor:pointer; font-size:12.5px; font-weight:600; }
+.range-btn:hover { border-color: var(--accent); }
+.range-btn.active { background: var(--accent); border-color: var(--accent); color:#fff; }
+.range-note { font-size:11.5px; color:var(--text-secondary); margin-left:auto; }
+.range-note.warn { color:#a15c00; }
+#load-error { display:none; }
+
+.kpi-row { display:grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap: var(--gap); margin-bottom: var(--gap); }
+.kpi-card { background: var(--bg-card); border-radius: var(--radius); padding:18px 22px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border:1px solid var(--border); }
+.kpi-label { font-size:12px; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+.kpi-value { font-size:26px; font-weight:700; }
+.kpi-value.positive { color: var(--positive); }
+.kpi-value.negative { color: var(--negative); }
+.kpi-note { font-size:12px; color: var(--text-secondary); margin-top:4px; }
+
+.chart-row { display:grid; grid-template-columns: 2fr 1fr; gap: var(--gap); margin-bottom: var(--gap); }
+.card { background: var(--bg-card); border-radius: var(--radius); padding:18px 22px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border:1px solid var(--border); }
+.card h3 { font-size:14px; font-weight:600; margin-bottom:14px; }
+.card canvas { max-height: 300px; }
+
+.table-grid { display:grid; grid-template-columns: 1fr 1fr; gap: var(--gap); margin-bottom: var(--gap); }
+.mini-table { width:100%; border-collapse:collapse; font-size:12.5px; }
+.mini-table th { text-align:left; padding:6px 8px; border-bottom:2px solid var(--border); color:var(--text-secondary); font-weight:600; font-size:11px; text-transform:uppercase; }
+.mini-table td { padding:6px 8px; border-bottom:1px solid #f0f1f3; }
+.mini-table tr:hover { background:#f8f9fb; }
+.badge-buy { color: var(--positive); font-weight:600; }
+.badge-sell { color: var(--negative); font-weight:600; }
+
+.explorer-layout { display:grid; grid-template-columns: 420px 1fr; gap: var(--gap); align-items:start; }
+.search-box { width:100%; padding:9px 12px; border:1px solid var(--border); border-radius:6px; font-size:13px; margin-bottom:10px; }
+.ticker-list { max-height: 640px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; }
+.ticker-row { padding:10px 14px; border-bottom:1px solid #f0f1f3; cursor:pointer; display:flex; justify-content:space-between; align-items:center; font-size:13px; }
+.ticker-row:hover { background:#f4f7ff; }
+.ticker-row.selected { background:#eaf1ff; border-left:3px solid var(--accent); }
+.ticker-row .name { font-weight:600; }
+.ticker-row .code { color: var(--text-secondary); font-size:11px; }
+.streak-chip { font-size:11px; padding:2px 8px; border-radius:10px; background:#eef2f7; color:var(--text-secondary); }
+.streak-chip.buy { background:#e6f4ea; color: var(--positive); }
+.streak-chip.sell { background:#fbe9e9; color: var(--negative); }
+
+.detail-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px; }
+.detail-header h2 { font-size:20px; }
+.detail-header .code { color: var(--text-secondary); font-size:13px; }
+.signal-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap:12px; margin-bottom:16px; }
+.signal-box { background:#f8f9fb; border-radius:8px; padding:12px 14px; border:1px solid var(--border); }
+.signal-box .label { font-size:11px; color:var(--text-secondary); text-transform:uppercase; margin-bottom:4px; }
+.signal-box .val { font-size:15px; font-weight:700; }
+.signal-box .val.positive { color: var(--positive); }
+.signal-box .val.negative { color: var(--negative); }
+.disclaimer { font-size:11.5px; color: var(--text-secondary); background:#fff8e6; border:1px solid #f0dfa8; border-radius:8px; padding:10px 14px; margin: 14px 0; }
+.signal-badge { display:inline-block; font-size:13px; font-weight:700; padding:4px 12px; border-radius:14px; margin-right:8px; }
+.signal-badge.positive { background:#e6f4ea; color:var(--positive); }
+.signal-badge.negative { background:#fbe9e9; color:var(--negative); }
+.signal-badge.neutral { background:#eef0f3; color:var(--neutral); }
+.analysis-card { background:#f8f9fb; border:1px solid var(--border); border-radius:8px; padding:14px 16px; margin-bottom:14px; }
+.analysis-card h3 { font-size:13px; text-transform:uppercase; letter-spacing:.03em; color:var(--text-secondary); margin-bottom:10px; }
+.trend-note { font-size:12.5px; background:#eef6ff; border:1px solid #cfe4fb; border-radius:6px; padding:8px 10px; margin-top:8px; }
+.mini-list { font-size:12.5px; }
+.mini-list .item { padding:6px 0; border-bottom:1px solid var(--border); }
+.mini-list .item:last-child { border-bottom:none; }
+.mini-list .item a { color:var(--accent); text-decoration:none; }
+.mini-list .item a:hover { text-decoration:underline; }
+.tag { display:inline-block; font-size:10.5px; padding:1px 7px; border-radius:8px; background:#eef0f3; color:var(--neutral); margin-left:6px; }
+.empty-state { color: var(--text-secondary); font-size:13px; padding: 40px; text-align:center; }
+.filter-label { font-size:10.5px; color:var(--text-secondary); font-weight:600; text-transform:uppercase; letter-spacing:.03em; margin-bottom:6px; }
+.chip-row { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
+.chip-btn { border:1px solid var(--border); background:#fff; color:var(--text-primary); padding:5px 12px; border-radius:14px; font-size:11.5px; font-weight:600; cursor:pointer; }
+.chip-btn.type-chip.active { background:#334155; border-color:#334155; color:#fff; }
+footer { text-align:center; color: var(--text-secondary); font-size:12px; padding: 20px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header class="top">
+    <div>
+      <h1>SGX Fund Flow Dashboard</h1>
+      <div class="sub" id="header-sub">Loading dashboard data…</div>
+    </div>
+    <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="overview">Overview</button>
+        <button class="tab-btn" data-tab="explorer">Ticker Explorer</button>
+        <button class="tab-btn" data-tab="signals">Signals</button>
+      </div>
+      <div class="last-updated" id="last-updated">Loading…</div>
+    </div>
+  </header>
+
+  <div class="filter-bar" id="filter-bar"></div>
+  <div class="disclaimer" id="load-error"></div>
+
+  <!-- OVERVIEW -->
+  <div class="tabpage active" id="tab-overview">
+    <div class="kpi-row" id="kpi-row"></div>
+    <div class="card" style="margin-bottom: var(--gap);">
+      <h3>Overall Net Flow — Institutional vs Retail (S$M / week)</h3>
+      <canvas id="trend-chart"></canvas>
+    </div>
+    <div class="card" style="margin-bottom: var(--gap);">
+      <h3 id="sector-chart-title">Sector Flow Trend (S$M / week)</h3>
+      <div style="font-size:11px; color:var(--text-secondary); margin:-8px 0 12px 0;">Solid = Institutional · Dashed = Retail. Click a legend entry to hide/show that line.</div>
+      <div class="filter-label">Sectors</div>
+      <div class="chip-row" id="sector-chips"></div>
+      <div class="filter-label">Investor Type</div>
+      <div class="chip-row" id="type-chips"></div>
+      <canvas id="sector-chart" style="max-height:340px;"></canvas>
+      <div id="sector-chart-empty" class="empty-state" style="display:none;">Select at least one sector and one investor type to see data.</div>
+    </div>
+    <div class="table-grid">
+      <div class="card">
+        <h3 id="inst-title">Top 10 Institutional — Latest Week</h3>
+        <table class="mini-table" id="inst-table"></table>
+      </div>
+      <div class="card">
+        <h3 id="retail-title">Top 10 Retail — Latest Week</h3>
+        <table class="mini-table" id="retail-table"></table>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--text-secondary);margin-top:-4px;">"~sh" is an implied net share estimate (|S$M value| ÷ that week's Friday close from Yahoo Finance) — an approximation of net shares, not exact broker-reported volume. The two Top 10 tables above always show the latest week, regardless of the time-range filter.</div>
+  </div>
+
+  <!-- EXPLORER -->
+  <div class="tabpage" id="tab-explorer">
+    <div class="explorer-layout">
+      <div>
+        <input class="search-box" id="ticker-search" placeholder="Search by name or code…">
+        <div class="ticker-list" id="ticker-list"></div>
+      </div>
+      <div class="card" id="ticker-detail">
+        <div class="empty-state">Select a ticker on the left to see its fund-flow history and signals.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SIGNALS -->
+  <div class="tabpage" id="tab-signals">
+    <div class="disclaimer">These are data-driven observations derived purely from SGX's weekly institutional/retail fund-flow rankings (streaks, divergence, magnitude). They are not buy/sell recommendations or financial advice — use them as one input alongside your own research.</div>
+    <div class="table-grid">
+      <div class="card">
+        <h3>Longest Active Buy Streaks</h3>
+        <table class="mini-table" id="streak-buy-table"></table>
+      </div>
+      <div class="card">
+        <h3>Longest Active Sell Streaks</h3>
+        <table class="mini-table" id="streak-sell-table"></table>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <h3 id="divergence-title">Institutional vs Retail Divergences (opposite sides, same week)</h3>
+      <table class="mini-table" id="divergence-table"></table>
+    </div>
+  </div>
+
+  <footer>Source: SGX Fund Flow Weekly Tracker · Generated dashboard, refreshed weekly</footer>
+</div>
+
+<script>
+const fmt = (v, opts={}) => {
+  if (v === null || v === undefined || isNaN(v)) return '—';
+  const sign = v >= 0 ? '+' : '';
+  return `${sign}${v.toFixed(1)}`;
+};
+const sideLabel = (side) => side === 'institutional' ? 'Institutional' : 'Retail';
+const dirClass = (d) => d === 'buy' ? 'badge-buy' : 'badge-sell';
+
+// ---- Tabs ----
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tabpage').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+let DATA = null;
+let weeks = [];
+let latestWeek = null;
+let tickerCodes = [];
+let selectedTicker = null;
+let detailChart = null;
+let trendChart = null;
+let sectorChart = null;
+const latestWeekPriceByCode = {};
+
+function updateLastUpdatedTimestamp() {
+  if (DATA && DATA.last_updated) {
+    document.getElementById('last-updated').textContent = 'Last updated: ' + DATA.last_updated;
+  }
+}
+
+// ---- Time-range filter (auto-adapts as more history accumulates week over week) ----
+const RANGE_OPTIONS = [
+  {key:'3m', label:'3M', weeks:13},
+  {key:'6m', label:'6M', weeks:26},
+  {key:'1y', label:'1Y', weeks:52},
+  {key:'3y', label:'3Y', weeks:156},
+  {key:'5y', label:'5Y', weeks:260},
+  {key:'all', label:'All', weeks:null},
+];
+let currentRangeKey = '1y';
+
+function currentWeeksList() {
+  const opt = RANGE_OPTIONS.find(o => o.key === currentRangeKey);
+  if (!opt || opt.weeks === null) return weeks;
+  return weeks.slice(Math.max(0, weeks.length - opt.weeks));
+}
+
+function renderFilterBar() {
+  const bar = document.getElementById('filter-bar');
+  const btnsHtml = RANGE_OPTIONS.map(o => `<button class="range-btn ${o.key===currentRangeKey?'active':''}" data-range="${o.key}">${o.label}</button>`).join('');
+  bar.innerHTML = `<span class="flabel">Time range:</span>${btnsHtml}<span class="range-note" id="range-note"></span>`;
+  bar.querySelectorAll('.range-btn').forEach(b => {
+    b.addEventListener('click', () => { currentRangeKey = b.dataset.range; onRangeChange(); });
+  });
+}
+
+function updateRangeNote() {
+  const opt = RANGE_OPTIONS.find(o => o.key === currentRangeKey);
+  const note = document.getElementById('range-note');
+  const cw = currentWeeksList();
+  if (!cw.length) { note.textContent = 'No data in range.'; return; }
+  if (opt.weeks && opt.weeks > weeks.length) {
+    note.textContent = `Showing all ${weeks.length} weeks collected so far — ${opt.label} (${opt.weeks} wks) requested but not yet available.`;
+    note.classList.add('warn');
+  } else {
+    note.textContent = `Showing ${cw.length} weeks (${cw[0]} → ${cw[cw.length-1]}).`;
+    note.classList.remove('warn');
+  }
+}
+
+function onRangeChange() {
+  renderFilterBar();
+  updateRangeNote();
+  renderKpis();
+  renderTrendChart();
+  renderSectorChart();
+  renderDivergenceTable();
+  if (selectedTicker) selectTicker(selectedTicker);
+}
+
+// ---- KPIs ----
+function latestOverall(investorType) {
+  const rec = DATA.sector_flow.filter(r => r.week_date === latestWeek && r.investor_type === investorType)[0];
+  return rec ? rec.overall_sgd_m : null;
+}
+function kpiCard(label, value, note) {
+  const cls = value > 0 ? 'positive' : (value < 0 ? 'negative' : '');
+  return `<div class="kpi-card"><div class="kpi-label">${label}</div><div class="kpi-value ${cls}">${fmt(value)}m</div><div class="kpi-note">${note}</div></div>`;
+}
+function renderKpis() {
+  const instOverall = latestOverall('institutional');
+  const retailOverall = latestOverall('retail');
+  const cw = currentWeeksList();
+  const kpiRow = document.getElementById('kpi-row');
+  kpiRow.innerHTML =
+    kpiCard('Institutional Net Flow (latest wk)', instOverall, 'S$ million, all sectors') +
+    kpiCard('Retail Net Flow (latest wk)', retailOverall, 'S$ million, all sectors') +
+    `<div class="kpi-card"><div class="kpi-label">Weeks In View</div><div class="kpi-value">${cw.length}</div><div class="kpi-note">of ${weeks.length} total tracked</div></div>` +
+    `<div class="kpi-card"><div class="kpi-label">Tickers Tracked</div><div class="kpi-value">${Object.keys(DATA.ticker_summary).length}</div><div class="kpi-note">appeared in a weekly Top 10</div></div>`;
+}
+
+// ---- Trend chart (scoped to selected range) ----
+function renderTrendChart() {
+  const cw = currentWeeksList();
+  const instSeries = cw.map(w => { const r = DATA.sector_flow.find(x => x.week_date===w && x.investor_type==='institutional'); return r ? r.overall_sgd_m : null; });
+  const retailSeries = cw.map(w => { const r = DATA.sector_flow.find(x => x.week_date===w && x.investor_type==='retail'); return r ? r.overall_sgd_m : null; });
+  if (trendChart) trendChart.destroy();
+  trendChart = new Chart(document.getElementById('trend-chart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: cw,
+      datasets: [
+        { label: 'Institutional', data: instSeries, borderColor: '#1f6feb', backgroundColor: '#1f6feb20', borderWidth: 2, tension: 0.25, pointRadius: 0 },
+        { label: 'Retail', data: retailSeries, borderColor: '#d1373f', backgroundColor: '#d1373f20', borderWidth: 2, tension: 0.25, pointRadius: 0 },
+      ]
+    },
+    options: { responsive:true, maintainAspectRatio:false, interaction:{mode:'index', intersect:false},
+      plugins:{legend:{position:'top', labels:{usePointStyle:true}}},
+      scales:{ x:{ ticks:{ maxTicksLimit: 10 }, grid:{display:false} }, y:{ ticks:{ callback:(v)=>`${v}m` } } } }
+  });
+}
+
+// ---- Sector chart: per-week trend, filterable by sector and by investor type ----
+const sectorNames = ["Consumer Cyclicals","Consumer Non-Cyclicals","Energy/Oil & Gas","Financial Services","Health care","Industrials","Materials & Resources","Real Estate (excl REITs)","REITs","Technology (Hardware/Software)","Telcos","Utilities"];
+const SECTOR_COLORS = ["#1f6feb","#d1373f","#1a8754","#f59e0b","#8b5cf6","#0aa392","#e879f9","#64748b","#0891b2","#ea580c","#65a30d","#db2777"];
+let activeSectors = new Set();
+let activeTypes = new Set(['institutional', 'retail']);
+
+function computeDefaultSectors() {
+  const cw = currentWeeksList();
+  const magnitude = {};
+  sectorNames.forEach(s => {
+    let m = 0;
+    cw.forEach(w => {
+      const ri = DATA.sector_flow.find(x => x.week_date === w && x.investor_type === 'institutional');
+      const rr = DATA.sector_flow.find(x => x.week_date === w && x.investor_type === 'retail');
+      if (ri && ri[s] != null) m += Math.abs(ri[s]);
+      if (rr && rr[s] != null) m += Math.abs(rr[s]);
+    });
+    magnitude[s] = m;
+  });
+  return new Set(sectorNames.slice().sort((a, b) => magnitude[b] - magnitude[a]).slice(0, 3));
+}
+
+function renderSectorChips() {
+  const sectorChipsEl = document.getElementById('sector-chips');
+  const typeChipsEl = document.getElementById('type-chips');
+
+  sectorChipsEl.innerHTML = '';
+  sectorNames.forEach((s, si) => {
+    const active = activeSectors.has(s);
+    const btn = document.createElement('button');
+    btn.className = 'chip-btn';
+    btn.textContent = s;
+    btn.style.borderColor = active ? SECTOR_COLORS[si] : '';
+    btn.style.background = active ? SECTOR_COLORS[si] : '';
+    btn.style.color = active ? '#fff' : '';
+    btn.addEventListener('click', () => {
+      if (activeSectors.has(s)) activeSectors.delete(s); else activeSectors.add(s);
+      renderSectorChips();
+      renderSectorChart();
+    });
+    sectorChipsEl.appendChild(btn);
+  });
+
+  typeChipsEl.innerHTML = '';
+  [['institutional', 'Institutional'], ['retail', 'Retail']].forEach(([key, label]) => {
+    const active = activeTypes.has(key);
+    const btn = document.createElement('button');
+    btn.className = 'chip-btn type-chip' + (active ? ' active' : '');
+    btn.textContent = label;
+    btn.addEventListener('click', () => {
+      if (activeTypes.has(key)) activeTypes.delete(key); else activeTypes.add(key);
+      renderSectorChips();
+      renderSectorChart();
+    });
+    typeChipsEl.appendChild(btn);
+  });
+}
+
+function renderSectorChart() {
+  const cw = currentWeeksList();
+  const titleEl = document.getElementById('sector-chart-title');
+  const canvasEl = document.getElementById('sector-chart');
+  const emptyEl = document.getElementById('sector-chart-empty');
+  titleEl.textContent = cw.length
+    ? `Sector Flow Trend (S$M / week), ${cw.length} wk${cw.length === 1 ? '' : 's'} (${cw[0]} → ${cw[cw.length - 1]})`
+    : 'Sector Flow Trend (S$M / week)';
+
+  const datasets = [];
+  sectorNames.forEach((s, si) => {
+    if (!activeSectors.has(s)) return;
+    if (activeTypes.has('institutional')) {
+      datasets.push({
+        label: `${s} (Inst)`,
+        data: cw.map(w => { const r = DATA.sector_flow.find(x => x.week_date === w && x.investor_type === 'institutional'); return r && r[s] != null ? r[s] : null; }),
+        borderColor: SECTOR_COLORS[si], backgroundColor: SECTOR_COLORS[si], borderWidth: 2, borderDash: [], tension: 0.25, pointRadius: 0, pointHoverRadius: 4,
+      });
+    }
+    if (activeTypes.has('retail')) {
+      datasets.push({
+        label: `${s} (Retail)`,
+        data: cw.map(w => { const r = DATA.sector_flow.find(x => x.week_date === w && x.investor_type === 'retail'); return r && r[s] != null ? r[s] : null; }),
+        borderColor: SECTOR_COLORS[si], backgroundColor: SECTOR_COLORS[si], borderWidth: 2, borderDash: [5, 3], tension: 0.25, pointRadius: 0, pointHoverRadius: 4,
+      });
+    }
+  });
+
+  if (!datasets.length) {
+    canvasEl.style.display = 'none';
+    emptyEl.style.display = 'block';
+    if (sectorChart) { sectorChart.destroy(); sectorChart = null; }
+    return;
+  }
+  canvasEl.style.display = 'block';
+  emptyEl.style.display = 'none';
+  if (sectorChart) sectorChart.destroy();
+  sectorChart = new Chart(canvasEl.getContext('2d'), {
+    type: 'line',
+    data: { labels: cw, datasets },
+    options: { responsive:true, maintainAspectRatio:false, interaction:{mode:'nearest', intersect:false},
+      plugins:{legend:{position:'bottom', labels:{usePointStyle:true, pointStyle:'line', pointStyleWidth:56, boxHeight:5, font:{size:11},
+        generateLabels: (chart) => {
+          const items = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+          items.forEach(item => { const ds = chart.data.datasets[item.datasetIndex]; item.lineDash = (ds && ds.borderDash) || []; });
+          return items;
+        }
+      }}},
+      scales:{ x:{ ticks:{ maxTicksLimit: 10 }, grid:{display:false} }, y:{ ticks:{ callback:(v)=>`${v}m` } } } }
+  });
+}
+
+// ---- Latest week tables (always the most recent week — a single-week snapshot isn't meaningfully "range filtered") ----
+function impliedVolCell(rec) {
+  if (!rec) return '';
+  const price = latestWeekPriceByCode[rec.stock_code];
+  if (!price) return '';
+  const impliedK = Math.abs(rec.value_sgd_m) * 1000 / price;
+  return `<div style="color:#9aa3af; font-size:10.5px;" title="Implied net shares = |S\$M value| ÷ this week's Friday close">~${Math.round(impliedK).toLocaleString()}k sh</div>`;
+}
+function renderTopTable(elId, side) {
+  const recs = DATA.records.filter(r => r.week_start === latestWeek && r.side === side).sort((a,b)=>a.rank-b.rank);
+  const buys = recs.filter(r=>r.direction==='buy');
+  const sells = recs.filter(r=>r.direction==='sell');
+  let html = '<thead><tr><th>#</th><th>Net Buy</th><th>S$M</th><th>#</th><th>Net Sell</th><th>S$M</th></tr></thead><tbody>';
+  for (let i=0;i<10;i++){
+    const b = buys[i], s = sells[i];
+    html += `<tr><td>${i+1}</td><td>${b?b.stock_name:''}</td><td class="badge-buy">${b?fmt(b.value_sgd_m):''}${impliedVolCell(b)}</td>` +
+            `<td>${i+1}</td><td>${s?s.stock_name:''}</td><td class="badge-sell">${s?fmt(s.value_sgd_m):''}${impliedVolCell(s)}</td></tr>`;
+  }
+  html += '</tbody>';
+  document.getElementById(elId).innerHTML = html;
+}
+
+// ---- Ticker Explorer ----
+function renderTickerList(filter='') {
+  const list = document.getElementById('ticker-list');
+  const f = filter.toLowerCase();
+  const filtered = tickerCodes.filter(c => {
+    const t = DATA.ticker_summary[c];
+    return c.toLowerCase().includes(f) || t.name.toLowerCase().includes(f);
+  });
+  const priceTickers = new Set((DATA.weekly_prices || []).map(r => r.stock_code));
+  list.innerHTML = filtered.map(c => {
+    const t = DATA.ticker_summary[c];
+    const bs = t.best_streak;
+    const chip = bs ? `<span class="streak-chip ${bs.type.includes('buy')?'buy':'sell'}">${bs.streak}w ${bs.type.replace('_',' ')}</span>` : '';
+    const priceTag = priceTickers.has(c) ? '<span class="streak-chip" title="Has Yahoo Finance weekly price data">$</span>' : '';
+    return `<div class="ticker-row ${c===selectedTicker?'selected':''}" data-code="${c}">
+      <div><div class="name">${t.name}</div><div class="code">${c} · ${t.total_appearances} appearances</div></div>
+      <div style="display:flex; gap:6px;">${priceTag}${chip}</div>
+    </div>`;
+  }).join('');
+  list.querySelectorAll('.ticker-row').forEach(row => {
+    row.addEventListener('click', () => selectTicker(row.dataset.code));
+  });
+}
+
+function streakPeriod(bestStreak) {
+  const lastIdx = weeks.indexOf(bestStreak.last_week);
+  const firstIdx = Math.max(0, lastIdx - bestStreak.streak + 1);
+  return `${weeks[firstIdx]} – ${weeks[lastIdx]}`;
+}
+function mondayOf(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  const day = d.getUTCDay();
+  const diff = (day === 0 ? 6 : day - 1);
+  d.setUTCDate(d.getUTCDate() - diff);
+  return d.toISOString().slice(0, 10);
+}
+function selectTicker(code) {
+  selectedTicker = code;
+  renderTickerList(document.getElementById('ticker-search').value);
+  const t = DATA.ticker_summary[code];
+  const panel = document.getElementById('ticker-detail');
+  const cw = currentWeeksList();
+
+  const history = DATA.records.filter(r => r.stock_code === code).sort((a,b)=> a.week_start.localeCompare(b.week_start));
+  const priceSnaps = (DATA.daily_momentum || []).filter(r => r.stock_code === code).sort((a,b)=> a.report_date.localeCompare(b.report_date));
+
+  const priceByWeek = {};
+  (DATA.weekly_prices || []).filter(r => r.stock_code === code).forEach(r => {
+    priceByWeek[r.week_start] = { avgPrice: r.close, volume: Math.round(r.volume / 1000) };
+  });
+  const hasPriceDataNote = Object.keys(priceByWeek).length
+    ? "Fri close (S$, right axis) and total weekly volume ('000 shares, far-right axis) sourced from Yahoo Finance, aligned to each week's Friday close."
+    : "No Yahoo Finance price data is available for this ticker (not covered by Yahoo Finance).";
+
+  let priceSection = '';
+  if (priceSnaps.length) {
+    const latest = priceSnaps[priceSnaps.length - 1];
+    priceSection = `
+    <div class="signal-grid">
+      <div class="signal-box"><div class="label">Last Price (${latest.report_date})</div><div class="val">S$${parseFloat(latest.last_price).toFixed(3)}</div></div>
+      <div class="signal-box"><div class="label">Day Price Change</div><div class="val">${latest.price_change_pct}%</div></div>
+      <div class="signal-box"><div class="label">52-Week High / Low</div><div class="val">${latest.w52_high} / ${latest.w52_low}</div></div>
+      <div class="signal-box"><div class="label">Day Volume ('000)</div><div class="val">${Number(latest.day_volume_k).toLocaleString()}</div></div>
+    </div>
+    <div class="disclaimer">Price snapshots are manually captured from SGX's Daily Momentum report on days this ticker appeared in one of its tables (Top 10 Traded, 52-week high/low, movers) — not a continuous daily series, so gaps between dates are expected.</div>
+    <table class="mini-table" style="margin-bottom:16px;">
+      <thead><tr><th>Date</th><th>Table</th><th>Last Price</th><th>Day Chg %</th><th>Day Volume ('000)</th><th>52W High</th><th>52W Low</th></tr></thead>
+      <tbody>
+        ${priceSnaps.slice().reverse().map(r => `<tr><td>${r.report_date}</td><td>${r.table}</td><td>S$${parseFloat(r.last_price).toFixed(3)}</td><td class="${parseFloat(r.price_change_pct)>=0?'badge-buy':'badge-sell'}">${r.price_change_pct}%</td><td>${Number(r.day_volume_k).toLocaleString()}</td><td>${r.w52_high}</td><td>${r.w52_low}</td></tr>`).join('')}
+      </tbody>
+    </table>`;
+  }
+
+  const weeksForTicker = [...new Set(history.map(h => h.week_start))].filter(w => cw.includes(w)).sort((a, b) => b.localeCompare(a));
+
+  function weekChangePct(weekStart) {
+    const idx = weeks.indexOf(weekStart);
+    if (idx <= 0) return null;
+    const cur = priceByWeek[weekStart];
+    const prev = priceByWeek[weeks[idx - 1]];
+    if (!cur || !prev || !prev.avgPrice) return null;
+    return ((cur.avgPrice - prev.avgPrice) / prev.avgPrice) * 100;
+  }
+
+  function sideCell(rec) {
+    if (!rec) return '<span style="color:#9aa3af;">—</span>';
+    const val = parseFloat(rec.value_sgd_m);
+    const cls = rec.direction === 'buy' ? 'badge-buy' : 'badge-sell';
+    const pw = priceByWeek[rec.week_start];
+    let impliedLine = '';
+    if (pw && pw.avgPrice) {
+      const impliedK = Math.abs(val) * 1000 / pw.avgPrice;
+      impliedLine = `<div style="color:#9aa3af; font-size:10.5px;" title="Implied net shares = |S\$M value| ÷ that week's Friday close">~${Math.round(impliedK).toLocaleString()}k sh</div>`;
+    }
+    return `<div class="${cls}">${fmt(val)}</div>${impliedLine}`;
+  }
+
+  const sigHistory = DATA.signals && DATA.signals[code] ? DATA.signals[code] : [];
+  const latestSig = sigHistory.length ? sigHistory[sigHistory.length - 1] : null;
+  const sigDef = latestSig && DATA.signal_definitions ? DATA.signal_definitions[latestSig.signal] : null;
+
+  let signalBlock = '';
+  if (latestSig && sigDef) {
+    signalBlock = `
+    <div class="analysis-card">
+      <h3>Signal — week of ${latestSig.week_start}</h3>
+      <span class="signal-badge ${sigDef.tone}">${sigDef.label}</span>
+      <span style="font-size:12.5px;color:var(--text-secondary);">${sigDef.desc}</span>
+      ${(t.trend_notes && t.trend_notes.length) ? t.trend_notes.map(n => `<div class="trend-note">${n}</div>`).join('') : ''}
+    </div>`;
+  }
+
+  let rollingBlock = '';
+  if (latestSig) {
+    const covNote = (cov, win) => cov < win ? ` <span class="tag">${cov}/${win} wks data</span>` : '';
+    rollingBlock = `
+    <div class="analysis-card">
+      <h3>Rolling Flow (vs. single week — one week can be noise)</h3>
+      <div class="signal-grid">
+        <div class="signal-box"><div class="label">Institutional, 4wk</div><div class="val ${latestSig.inst_4wk>=0?'positive':'negative'}">${fmt(latestSig.inst_4wk)}</div>${covNote(latestSig.inst_4wk_coverage, latestSig.inst_4wk_window)}</div>
+        <div class="signal-box"><div class="label">Institutional, 12wk</div><div class="val ${latestSig.inst_12wk>=0?'positive':'negative'}">${fmt(latestSig.inst_12wk)}</div>${covNote(latestSig.inst_12wk_coverage, latestSig.inst_12wk_window)}</div>
+        <div class="signal-box"><div class="label">Retail, 4wk</div><div class="val ${latestSig.retail_4wk>=0?'positive':'negative'}">${fmt(latestSig.retail_4wk)}</div>${covNote(latestSig.retail_4wk_coverage, 4)}</div>
+        <div class="signal-box"><div class="label">Retail, 12wk</div><div class="val ${latestSig.retail_12wk>=0?'positive':'negative'}">${fmt(latestSig.retail_12wk)}</div>${covNote(latestSig.retail_12wk_coverage, 12)}</div>
+      </div>
+      ${(latestSig.institutional_pct_mcap !== null && latestSig.institutional_pct_mcap !== undefined) ? `
+      <div style="margin-top:10px; font-size:12.5px;">
+        <strong>As % of market cap</strong> (normalizes for company size — S$100m matters more for a small cap than for a mega-cap):
+        Institutional ${latestSig.institutional_pct_mcap >= 0 ? '+' : ''}${latestSig.institutional_pct_mcap}% ·
+        Retail ${latestSig.retail_pct_mcap !== null ? (latestSig.retail_pct_mcap >= 0 ? '+' : '') + latestSig.retail_pct_mcap + '%' : '—'}
+      </div>` : '<div style="margin-top:10px; font-size:12px; color:var(--text-secondary);">Market-cap normalization unavailable (no shares outstanding data for this ticker).</div>'}
+    </div>`;
+  }
+
+  const shortSellRow = (DATA.short_sell || []).find(r => r.stock_code === code);
+  let shortSellBlock = '';
+  if (shortSellRow) {
+    shortSellBlock = `
+    <div class="analysis-card">
+      <h3>Short-Sell Snapshot — ${shortSellRow.snapshot_date}</h3>
+      <div class="signal-grid">
+        <div class="signal-box"><div class="label">Short Sell Volume</div><div class="val">${Number(shortSellRow.short_sell_volume_000).toLocaleString()}k</div></div>
+        <div class="signal-box"><div class="label">% of Day's Volume</div><div class="val">${shortSellRow.short_sell_pct}%</div></div>
+        <div class="signal-box"><div class="label">Short Sell Value</div><div class="val">S$${Number(shortSellRow.short_sell_value_sgd_000).toLocaleString()}k</div></div>
+        <div class="signal-box"><div class="label">Avg Short Sell Price</div><div class="val">S$${shortSellRow.avg_short_sell_price}</div></div>
+      </div>
+      <div class="disclaimer" style="margin-top:10px;margin-bottom:0;">Best-effort, third-party sourced (SGinvestors.io, derived from SGX's daily short-sell report) — only tickers ranking in that day's Top 20 by short-sell value or volume appear here. A ticker with no snapshot below simply wasn't in that day's top movers, not necessarily zero short activity.</div>
+    </div>`;
+  }
+
+  const shHolder = (DATA.shareholder_announcements || []).filter(r => r.stock_code === code).sort((a,b)=> b.date.localeCompare(a.date));
+  let shareholderBlock = '';
+  if (shHolder.length) {
+    shareholderBlock = `
+    <div class="analysis-card">
+      <h3>Recent Interest Disclosures (Directors / Substantial Shareholders)</h3>
+      <div class="mini-list">
+        ${shHolder.map(r => `<div class="item"><strong>${r.date}</strong> — <a href="${r.url}" target="_blank" rel="noopener">${r.title}</a><span class="tag">${r.notice_type}</span></div>`).join('')}
+      </div>
+      <div class="disclaimer" style="margin-top:10px;margin-bottom:0;">From SGX's Company Announcements (SGXNet), category "Disclosure of Interest/Changes in Interest" — confirms director dealings and substantial shareholder (5%+) stake changes. Coverage is being built out ticker-by-ticker over time; absence here doesn't mean no filings exist.</div>
+    </div>`;
+  }
+
+  panel.innerHTML = `
+    <div class="detail-header">
+      <div><h2>${t.name}</h2><div class="code">${code} · first seen ${t.first_seen} · last seen ${t.last_seen}</div></div>
+    </div>
+    <div class="signal-grid">
+      <div class="signal-box"><div class="label">Total Appearances</div><div class="val">${t.total_appearances}</div></div>
+      <div class="signal-box"><div class="label">Best Active Streak</div><div class="val">${t.best_streak ? t.best_streak.streak+'w '+t.best_streak.type.replace('_',' ') : '—'}</div>${t.best_streak ? `<div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">${streakPeriod(t.best_streak)}</div>` : ''}</div>
+      <div class="signal-box"><div class="label">Institutional Buy / Sell</div><div class="val">${t.counts.institutional_buy||0} / ${t.counts.institutional_sell||0}</div></div>
+      <div class="signal-box"><div class="label">Retail Buy / Sell</div><div class="val">${t.counts.retail_buy||0} / ${t.counts.retail_sell||0}</div></div>
+      <div class="signal-box"><div class="label">Inst/Retail Divergence Weeks</div><div class="val">${t.divergence_count}</div></div>
+    </div>
+    <div class="disclaimer">Data-driven observation, not a recommendation: review alongside your own research before making any trading decision.</div>
+    ${signalBlock}
+    ${rollingBlock}
+    ${shortSellBlock}
+    ${shareholderBlock}
+    ${priceSection}
+    <div style="font-size:11px;color:var(--text-secondary);margin-bottom:6px;">${hasPriceDataNote} Table and chart below reflect the current time-range filter (${cw.length} wks).</div>
+    <canvas id="ticker-chart" style="max-height:260px; margin-bottom:16px;"></canvas>
+    <table class="mini-table">
+      <thead><tr><th>Week</th><th>Institutional</th><th>Retail</th><th>Fri Close</th><th>Wk Chg %</th><th>Total Wk Vol ('000)</th></tr></thead>
+      <tbody>
+        ${weeksForTicker.map(w => {
+          const inst = history.find(h => h.week_start === w && h.side === 'institutional');
+          const ret = history.find(h => h.week_start === w && h.side === 'retail');
+          const pw = priceByWeek[w];
+          const priceCell = pw ? `S$${pw.avgPrice.toFixed(3)}` : '<span style="color:#9aa3af;" title="No Yahoo Finance price data for this ticker/week">—</span>';
+          const volCell = pw ? Number(pw.volume).toLocaleString() : '<span style="color:#9aa3af;" title="No Yahoo Finance price data for this ticker/week">—</span>';
+          const chg = weekChangePct(w);
+          const chgCell = chg !== null ? `<span class="${chg>=0?'badge-buy':'badge-sell'}">${chg>=0?'+':''}${chg.toFixed(1)}%</span>` : '<span style="color:#9aa3af;">—</span>';
+          return `<tr><td>${w}</td><td>${sideCell(inst)}</td><td>${sideCell(ret)}</td><td>${priceCell}</td><td>${chgCell}</td><td>${volCell}</td></tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+    <div style="font-size:11px;color:var(--text-secondary);margin-top:6px;">"~sh" figures are implied net shares, estimated as |S$M value| ÷ that week's Friday close — an approximation of net (buys minus sells), not exact broker-reported volume, and it will be off in weeks with large intra-week price swings.</div>
+  `;
+
+  const instVals = cw.map(w => { const r = history.find(h=>h.week_start===w && h.side==='institutional'); return r ? parseFloat(r.value_sgd_m) : null; });
+  const retailVals = cw.map(w => { const r = history.find(h=>h.week_start===w && h.side==='retail'); return r ? parseFloat(r.value_sgd_m) : null; });
+  const priceSeries = cw.map(w => priceByWeek[w] ? priceByWeek[w].avgPrice : null);
+  const volumeSeries = cw.map(w => priceByWeek[w] ? priceByWeek[w].volume : null);
+  const hasPriceData = priceSeries.some(v => v !== null);
+  if (detailChart) detailChart.destroy();
+  const datasets = [
+    { type:'bar', label:'Institutional', data: instVals, backgroundColor:'#1f6feb', yAxisID:'y' },
+    { type:'bar', label:'Retail', data: retailVals, backgroundColor:'#d1373f', yAxisID:'y' },
+  ];
+  if (hasPriceData) {
+    datasets.push(
+      { type:'line', label:'Avg Price (S$)', data: priceSeries, yAxisID:'yPrice', borderColor:'#0aa392', backgroundColor:'#0aa392', spanGaps:false, pointRadius:4, pointHoverRadius:6, tension:0, borderWidth:2 },
+      { type:'line', label:"Volume ('000)", data: volumeSeries, yAxisID:'yVolume', borderColor:'#f59e0b', backgroundColor:'#f59e0b', spanGaps:false, pointRadius:4, pointHoverRadius:6, tension:0, borderWidth:2, borderDash:[4,3] }
+    );
+  }
+  const scalesCfg = { x:{ ticks:{ maxTicksLimit: 12 }, grid:{display:false} }, y:{ ticks:{ callback:(v)=>`${v}m` } } };
+  if (hasPriceData) {
+    scalesCfg.yPrice = { position:'right', grid:{drawOnChartArea:false}, ticks:{ callback:(v)=>`S$${v}` } };
+    scalesCfg.yVolume = { position:'right', grid:{drawOnChartArea:false}, ticks:{ callback:(v)=>`${v}k` } };
+  }
+  detailChart = new Chart(document.getElementById('ticker-chart').getContext('2d'), {
+    type: 'bar',
+    data: { labels: cw, datasets },
+    options: { responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:'top', labels:{usePointStyle:true}}},
+      scales: scalesCfg }
+  });
+}
+
+// ---- Signals tab ----
+function renderStreakTable(elId, type) {
+  const items = tickerCodes
+    .map(c => ({c, t: DATA.ticker_summary[c]}))
+    .filter(x => x.t.best_streak && x.t.best_streak.type.includes(type) && x.t.best_streak.last_week === latestWeek)
+    .sort((a,b) => b.t.best_streak.streak - a.t.best_streak.streak)
+    .slice(0, 12);
+  let html = '<thead><tr><th>Ticker</th><th>Streak</th><th>Type</th></tr></thead><tbody>';
+  items.forEach(x => {
+    html += `<tr><td>${x.t.name} (${x.c})</td><td>${x.t.best_streak.streak} weeks</td><td>${x.t.best_streak.type.replace('_',' ')}</td></tr>`;
+  });
+  html += '</tbody>';
+  document.getElementById(elId).innerHTML = html;
+}
+function renderDivergenceTable() {
+  const cw = currentWeeksList();
+  const cwSet = new Set(cw);
+  const divTable = document.getElementById('divergence-table');
+  const titleEl = document.getElementById('divergence-title');
+  titleEl.textContent = `Institutional vs Retail Divergences — ${cw.length ? cw.length + ' wks in view' : 'no data in view'}`;
+  const recentDiv = DATA.divergence_events.filter(d => cwSet.has(d.week_start)).slice().reverse().slice(0, 25);
+  divTable.innerHTML = '<thead><tr><th>Week</th><th>Ticker</th><th>Institutional</th><th>Retail</th></tr></thead><tbody>' +
+    recentDiv.map(d => {
+      const name = DATA.ticker_summary[d.stock_code] ? DATA.ticker_summary[d.stock_code].name : d.stock_code;
+      return `<tr><td>${d.week_start}</td><td>${name} (${d.stock_code})</td><td class="${dirClass(d.institutional)}">${d.institutional}</td><td class="${dirClass(d.retail)}">${d.retail}</td></tr>`;
+    }).join('') + '</tbody>';
+}
+
+// ---- Load data (external file — keeps this HTML light as history grows) ----
+async function loadDashboard() {
+  try {
+    const res = await fetch('data.json', {cache:'no-store'});
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    DATA = await res.json();
+  } catch (err) {
+    const el = document.getElementById('load-error');
+    el.style.display = 'block';
+    el.textContent = `Couldn't load dashboard data (data.json): ${err.message}. If you opened this file directly from disk, browsers block local file loading for security — open the hosted version instead: https://davidsurjadi.github.io/SGX-Weekly-Update/`;
+    document.getElementById('header-sub').textContent = 'Failed to load data.';
+    return;
+  }
+
+  weeks = DATA.weeks;
+  latestWeek = weeks[weeks.length - 1];
+  tickerCodes = Object.keys(DATA.ticker_summary).sort((a,b) => DATA.ticker_summary[b].total_appearances - DATA.ticker_summary[a].total_appearances);
+
+  document.getElementById('header-sub').textContent =
+    `${weeks.length} weeks of history (${weeks[0]} → ${latestWeek}) · ${Object.keys(DATA.ticker_summary).length} tickers tracked · Latest week: ${latestWeek}`;
+
+  updateLastUpdatedTimestamp();
+  (DATA.weekly_prices || []).filter(r => r.week_start === latestWeek).forEach(r => { latestWeekPriceByCode[r.stock_code] = r.close; });
+
+  renderFilterBar();
+  updateRangeNote();
+  renderKpis();
+  renderTrendChart();
+  activeSectors = computeDefaultSectors();
+  renderSectorChips();
+  renderSectorChart();
+  renderTopTable('inst-table', 'institutional');
+  renderTopTable('retail-table', 'retail');
+  document.getElementById('inst-title').textContent = `Top 10 Institutional — Week of ${latestWeek}`;
+  document.getElementById('retail-title').textContent = `Top 10 Retail — Week of ${latestWeek}`;
+
+  document.getElementById('ticker-search').addEventListener('input', (e) => renderTickerList(e.target.value));
+  renderTickerList();
+
+  renderStreakTable('streak-buy-table', 'buy');
+  renderStreakTable('streak-sell-table', 'sell');
+  renderDivergenceTable();
+}
+loadDashboard();
+</script>
+</body>
+</html>
