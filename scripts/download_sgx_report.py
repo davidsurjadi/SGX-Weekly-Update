@@ -17,7 +17,7 @@ Returns: week_start date (YYYY-MM-DD) or None if no new report.
 import os
 import re
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 try:
@@ -46,7 +46,7 @@ def parse_week_from_filename(filename):
     if dt is None:
         return None
     # Return the Monday of that week
-    monday = dt - (dt.weekday() * (dt.weekday() > 0))
+    monday = dt - timedelta(days=dt.weekday())
     return monday.strftime('%Y-%m-%d')
 
 
