@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.environ.get("DATA_DIR", os.path.join(SCRIPT_DIR, "..", "data"))
@@ -11,13 +11,12 @@ DATA_OUT_FILE = os.environ.get("DATA_OUT_FILE", os.path.join(os.path.dirname(os.
 template = open(os.path.join(SCRIPT_DIR, "dashboard_template.html"), encoding="utf-8").read()
 data = json.load(open(os.path.join(DATA_DIR, "dashboard_data.json")))
 
-# Add last updated timestamp in Singapore timezone (UTC+8)
-sg_tz = timezone(timezone(datetime.now(timezone.utc).astimezone().tzinfo).utcoffset(None))
-now_utc = datetime.now(timezone.utc)
-now_sg = now_utc.astimezone(timezone(timezone(datetime.now(timezone.utc).astimezone().tzinfo).utcoffset(None)))
+# Add last updated timestamp in Singapore timezone (UTC+8, fixed offset — SGX/SGT doesn't observe DST)
+SG_TZ = timezone(timedelta(hours=8))
+now_sg = datetime.now(timezone.utc).astimezone(SG_TZ)
 
-# Format: "8 Aug 2026, 9:15 AM SGT"
-last_updated = now_utc.strftime("%d %b %Y, %I:%M %p") + " UTC"
+# Format: "08 Aug 2026, 09:15 AM SGT"
+last_updated = now_sg.strftime("%d %b %Y, %I:%M %p") + " SGT"
 data['last_updated'] = last_updated
 
 data_json = json.dumps(data, separators=(",", ":"))
