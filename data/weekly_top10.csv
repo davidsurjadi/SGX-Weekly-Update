@@ -1,0 +1,41 @@
+week_start,report_week,side,direction,rank,stock_name,stock_code,value_sgd_m
+2026-07-27,27 July 2026,institutional,buy,1,Singtel,Z74,166.9123337
+2026-07-27,27 July 2026,institutional,buy,2,Keppel,BN4,74.709552
+2026-07-27,27 July 2026,institutional,buy,3,CapitaLand Investment,9CI,62.456383
+2026-07-27,27 July 2026,institutional,buy,4,SIA,C6L,59.96277
+2026-07-27,27 July 2026,institutional,buy,5,SGX,S68,32.795685
+2026-07-27,27 July 2026,institutional,buy,6,Keppel DC REIT,AJBU,18.432647
+2026-07-27,27 July 2026,institutional,buy,7,Seatrium,5E2,12.122977
+2026-07-27,27 July 2026,institutional,buy,8,Olam Group,VC2,11.745634
+2026-07-27,27 July 2026,institutional,buy,9,Thai Beverage,Y92,7.17574
+2026-07-27,27 July 2026,institutional,buy,10,Hongkong Land,H78,5.458184542800001
+2026-07-27,27 July 2026,institutional,sell,1,DBS,D05,-157.072048
+2026-07-27,27 July 2026,institutional,sell,2,OCBC,O39,-81.403014
+2026-07-27,27 July 2026,institutional,sell,3,ST Engineering,S63,-48.850229
+2026-07-27,27 July 2026,institutional,sell,4,Yangzijiang Shipbuilding,BS6,-34.673189
+2026-07-27,27 July 2026,institutional,sell,5,AEM,AWX,-28.74885
+2026-07-27,27 July 2026,institutional,sell,6,UOB,U11,-25.018193
+2026-07-27,27 July 2026,institutional,sell,7,UMS,558,-22.559744
+2026-07-27,27 July 2026,institutional,sell,8,iFast Corporation,AIY,-20.471414
+2026-07-27,27 July 2026,institutional,sell,9,Venture Corporation,V03,-15.238177
+2026-07-27,27 July 2026,institutional,sell,10,Frencken Group,E28,-11.621624
+2026-07-27,27 July 2026,retail,buy,1,DBS,D05,128.115255
+2026-07-27,27 July 2026,retail,buy,2,OCBC,O39,121.58842
+2026-07-27,27 July 2026,retail,buy,3,ST Engineering,S63,64.858204
+2026-07-27,27 July 2026,retail,buy,4,UMS,558,25.008059
+2026-07-27,27 July 2026,retail,buy,5,UOB,U11,21.435434
+2026-07-27,27 July 2026,retail,buy,6,iFast Corporation,AIY,20.659102
+2026-07-27,27 July 2026,retail,buy,7,AEM,AWX,17.06404
+2026-07-27,27 July 2026,retail,buy,8,Venture Corporation,V03,15.037985
+2026-07-27,27 July 2026,retail,buy,9,Yangzijiang Shipbuilding,BS6,12.018956
+2026-07-27,27 July 2026,retail,buy,10,Keppel DC REIT,AJBU,11.136044
+2026-07-27,27 July 2026,retail,sell,1,Singtel,Z74,-74.42107779999999
+2026-07-27,27 July 2026,retail,sell,2,SGX,S68,-45.826186
+2026-07-27,27 July 2026,retail,sell,3,SIA,C6L,-36.411393
+2026-07-27,27 July 2026,retail,sell,4,CapitaLand Investment,9CI,-29.298942
+2026-07-27,27 July 2026,retail,sell,5,Keppel,BN4,-28.482412
+2026-07-27,27 July 2026,retail,sell,6,Wilmar International,F34,-16.00318
+2026-07-27,27 July 2026,retail,sell,7,Seatrium,5E2,-14.302529
+2026-07-27,27 July 2026,retail,sell,8,Hongkong Land,H78,-12.7323714052
+2026-07-27,27 July 2026,retail,sell,9,Keppel REIT,K71U,-11.2432355
+2026-07-27,27 July 2026,retail,sell,10,CapitaLand Ascendas REIT,A17U,-10.405765
