@@ -1,9 +1,13 @@
 name: SGX Weekly Fund Flow Update
 
+# Note: scripts/download_sgx_report.py now queries SGX's JSON content API
+# directly instead of scraping HTML (the data-reports page is a JS-rendered
+# SPA, so the report list was never present in the raw HTML).
+
 on:
   schedule:
-    # Monday 1 AM UTC = Monday 9 AM SGT
-    - cron: '0 1 * * 1'
+    # Monday 11:59 PM SGT = Monday 3:59 PM UTC
+    - cron: '59 15 * * 1'
 
   # Allow manual trigger for testing
   workflow_dispatch:
@@ -15,12 +19,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
