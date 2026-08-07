@@ -2,8 +2,14 @@
 """
 Download the latest SGX Fund Flow Weekly Tracker report.
 
-Scrapes https://www.sgx.com/stock-exchange/data-reports?reportType=203
-to find the newest report, checks if already downloaded, and downloads if new.
+Queries SGX's content API (the same JSON endpoint the data-reports page's
+frontend calls internally) to find the newest report, checks if it's already
+downloaded, and downloads it if new.
+
+Note: https://www.sgx.com/stock-exchange/data-reports?reportType=203 is a
+JavaScript-rendered SPA — the report list never appears in the raw page HTML,
+so plain HTML scraping (requests + BeautifulSoup on that URL) always returns
+zero results. Calling the underlying JSON API directly is the reliable path.
 
 Returns: week_start date (YYYY-MM-DD) or None if no new report.
 """
@@ -16,58 +22,80 @@ from pathlib import Path
 
 try:
     import requests
-    from bs4 import BeautifulSoup
 except ImportError:
-    print("ERROR: Missing required packages. Run: pip install requests beautifulsoup4")
+    print("ERROR: Missing required packages. Run: pip install requests")
     sys.exit(1)
 
 
 def parse_week_from_filename(filename):
-    """Extract week_start date from filename like 'SGX Fund Flow Weekly Tracker (Week of 27 July 2026).xlsx'"""
+    """Extract week_start date from a name like 'SGX Fund Flow Weekly Tracker
+    (Week of 27 July 2026)' or the abbreviated form '(Week of 27 Jul 2026)' —
+    SGX's API returns titles with the abbreviated month, downloaded filenames
+    use the full month, so both must parse."""
     match = re.search(r'Week of (\d{1,2}) (\w+) (\d{4})', filename)
     if not match:
         return None
     day, month_str, year = match.groups()
-    try:
-        month_map = {
-            'January': 1, 'February': 2, 'March': 3, 'April': 4, 'May': 5, 'June': 6,
-            'July': 7, 'August': 8, 'September': 9, 'October': 10, 'November': 11, 'December': 12
-        }
-        month = month_map[month_str]
-        dt = datetime(int(year), month, int(day))
-        # Return the Monday of that week
-        monday = dt - (dt.weekday() * (dt.weekday() > 0))
-        return monday.strftime('%Y-%m-%d')
-    except (ValueError, KeyError):
+    dt = None
+    for fmt in ('%d %b %Y', '%d %B %Y'):
+        try:
+            dt = datetime.strptime(f'{day} {month_str} {year}', fmt)
+            break
+        except ValueError:
+            continue
+    if dt is None:
         return None
+    # Return the Monday of that week
+    monday = dt - (dt.weekday() * (dt.weekday() > 0))
+    return monday.strftime('%Y-%m-%d')
 
 
 def get_latest_report_url():
-    """Fetch SGX data reports page and extract latest Fund Flow report URL."""
-    url = "https://www.sgx.com/stock-exchange/data-reports?reportType=203"
+    """Query SGX's content API for the latest Fund Flow Tracker report.
+
+    The SGX data-reports page (https://www.sgx.com/stock-exchange/data-reports)
+    is a JavaScript-rendered SPA — the report list is not present in the raw
+    HTML, it's fetched client-side from this JSON API after page load. Plain
+    HTML scraping (requests + BeautifulSoup on the page URL) will always find
+    zero results, which is why this calls the underlying API directly instead.
+    """
+    api_url = "https://api2.sgx.com/content-api"
+    params = {
+        "queryId": "09434be8973b96b28894aefc57aff9e6c1f8f9c6:funds_flow_reports_list",
+        "variables": '{"limit":20,"offset":0,"reportType":"203","reportTypeFilterEnabled":true,"lang":"EN"}',
+    }
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                      "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json",
+    }
     try:
-        resp = requests.get(url, timeout=15)
+        resp = requests.get(api_url, params=params, headers=headers, timeout=15)
         resp.raise_for_status()
     except requests.RequestException as e:
-        print(f"ERROR: Failed to fetch SGX page: {e}")
+        print(f"ERROR: Failed to fetch SGX report API: {e}")
         return None, None
 
-    soup = BeautifulSoup(resp.text, 'html.parser')
-
-    # Find all links containing "Fund Flow" and ".xlsx"
-    links = []
-    for a in soup.find_all('a', href=True):
-        href = a['href']
-        text = a.get_text(strip=True)
-        if 'Fund Flow' in text and '.xlsx' in href:
-            links.append((href, text))
-
-    if not links:
-        print("ERROR: No Fund Flow reports found on SGX page")
+    try:
+        payload = resp.json()
+        results = payload["data"]["list"]["results"]
+    except (ValueError, KeyError, TypeError) as e:
+        print(f"ERROR: Unexpected SGX API response shape: {e}")
         return None, None
 
-    # Take the first (newest) link
-    report_url, report_name = links[0]
+    if not results:
+        print("ERROR: No Fund Flow reports found via SGX API")
+        return None, None
+
+    # Results are sorted newest-first
+    latest = results[0]["data"]
+    report_name = latest.get("title", "")
+    try:
+        report_url = latest["report"]["data"]["file"]["data"]["url"]
+    except (KeyError, TypeError):
+        print(f"ERROR: Could not extract file URL from report: {report_name}")
+        return None, None
+
     week_start = parse_week_from_filename(report_name)
 
     if not week_start:
@@ -96,8 +124,12 @@ def is_already_downloaded(week_start, raw_dir):
 
 def download_report(report_url, week_start, raw_dir):
     """Download the report file."""
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                      "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    }
     try:
-        resp = requests.get(report_url, timeout=30)
+        resp = requests.get(report_url, headers=headers, timeout=30)
         resp.raise_for_status()
     except requests.RequestException as e:
         print(f"ERROR: Failed to download report: {e}")
