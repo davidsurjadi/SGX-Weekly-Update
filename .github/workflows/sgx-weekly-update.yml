@@ -6,8 +6,8 @@ name: SGX Weekly Fund Flow Update
 
 on:
   schedule:
-    # Monday 11:59 PM SGT = Monday 3:59 PM UTC
-    - cron: '59 15 * * 1'
+    # Tuesday 8:00 AM SGT = Tuesday 12:00 AM UTC
+    - cron: '0 0 * * 2'
 
   # Allow manual trigger for testing
   workflow_dispatch:

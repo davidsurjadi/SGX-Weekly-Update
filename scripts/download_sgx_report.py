@@ -50,8 +50,15 @@ def parse_week_from_filename(filename):
     return monday.strftime('%Y-%m-%d')
 
 
-def get_latest_report_url():
-    """Query SGX's content API for the latest Fund Flow Tracker report.
+def fetch_report_list(limit=20):
+    """Query SGX's content API and return [(week_start, title, url), ...].
+
+    Sorted newest week first. Note that SGX orders the raw API response by
+    PUBLISH date, not by the week the report covers, and it sometimes
+    publishes two weeks on the same day (e.g. "Week of 3 Aug 2026" and
+    "Week of 27 Jul 2026" both appeared dated 03 Aug 2026). Callers must not
+    assume element 0 is the newest week, so this re-sorts by parsed week and
+    returns the whole list for backfill.
 
     The SGX data-reports page (https://www.sgx.com/stock-exchange/data-reports)
     is a JavaScript-rendered SPA — the report list is not present in the raw
@@ -59,6 +66,85 @@ def get_latest_report_url():
     HTML scraping (requests + BeautifulSoup on the page URL) will always find
     zero results, which is why this calls the underlying API directly instead.
     """
+    api_url = "https://api2.sgx.com/content-api"
+    params = {
+        "queryId": "09434be8973b96b28894aefc57aff9e6c1f8f9c6:funds_flow_reports_list",
+        "variables": ('{"limit":%d,"offset":0,"reportType":"203",'
+                      '"reportTypeFilterEnabled":true,"lang":"EN"}' % limit),
+    }
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                      "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json",
+    }
+    try:
+        resp = requests.get(api_url, params=params, headers=headers, timeout=15)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        print(f"ERROR: Failed to fetch SGX report API: {e}")
+        return []
+
+    try:
+        results = resp.json()["data"]["list"]["results"]
+    except (ValueError, KeyError, TypeError) as e:
+        print(f"ERROR: Unexpected SGX API response shape: {e}")
+        return []
+
+    reports = []
+    for item in results:
+        data = item.get("data", {})
+        title = data.get("title", "")
+        week_start = parse_week_from_filename(title)
+        if not week_start:
+            continue
+        try:
+            url = data["report"]["data"]["file"]["data"]["url"]
+        except (KeyError, TypeError):
+            print(f"WARNING: No file URL for report: {title}")
+            continue
+        reports.append((week_start, title, url))
+
+    # Sort by the week the report covers, newest first — NOT by publish order.
+    reports.sort(key=lambda r: r[0], reverse=True)
+    return reports
+
+
+def find_missing_reports(raw_dir, limit=20):
+    """Return [(week_start, title, url), ...] for weeks not yet in raw_dir."""
+    reports = fetch_report_list(limit=limit)
+    if not reports:
+        return []
+
+    have = set()
+    for f in os.listdir(raw_dir):
+        if f.endswith('.xlsx'):
+            w = parse_week_from_filename(f)
+            if w:
+                have.add(w)
+
+    missing = [r for r in reports if r[0] not in have]
+    # Oldest first so the archive fills in chronological order.
+    missing.sort(key=lambda r: r[0])
+
+    print(f"SGX API listed {len(reports)} reports; {len(have)} weeks already archived; "
+          f"{len(missing)} missing.")
+    for week_start, title, _ in missing:
+        print(f"  MISSING: {title} (week of {week_start})")
+    return missing
+
+
+def get_latest_report_url():
+    """Backwards-compatible helper: return (url, week_start) for the newest week."""
+    reports = fetch_report_list()
+    if not reports:
+        print("ERROR: No Fund Flow reports found via SGX API")
+        return None, None
+    week_start, title, url = reports[0]
+    print(f"Found latest report: {title} (week of {week_start})")
+    return url, week_start
+
+
+def _legacy_get_latest_report_url():
     api_url = "https://api2.sgx.com/content-api"
     params = {
         "queryId": "09434be8973b96b28894aefc57aff9e6c1f8f9c6:funds_flow_reports_list",

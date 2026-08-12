@@ -56,7 +56,13 @@ class TelegramNotifier:
     def send_message(self, text: str) -> bool:
         """Send a message to Telegram. Returns True if sent, False otherwise."""
         if not self.enabled:
-            print(f"[TELEGRAM DISABLED] {text[:100]}")
+            # Windows consoles default to cp1252, which cannot encode the emoji
+            # used in these messages. Without this guard the notifier itself
+            # raises UnicodeEncodeError and takes the whole run down.
+            preview = text[:100]
+            enc = (sys.stdout.encoding or "utf-8")
+            safe = preview.encode(enc, errors="replace").decode(enc, errors="replace")
+            print(f"[TELEGRAM DISABLED] {safe}")
             return False
 
         try:
@@ -91,11 +97,26 @@ class TelegramNotifier:
 Fetching the latest report..."""
         self.send_message(msg)
 
-    def send_success(self, week_start: str, total_weeks: int = 0, ticker_count: int = 0):
-        """Notify successful completion with stats and a link to the live dashboard."""
-        msg = f"""✅ <b>SGX Fund Flow Dashboard Updated</b>
+    def send_success(self, week_start: str, total_weeks: int = 0, ticker_count: int = 0,
+                     weeks_added=None):
+        """Notify successful completion with stats and a link to the live dashboard.
 
-📅 Week of {week_start}
+        `weeks_added` makes a no-op run visibly a no-op. Previously every run
+        said "Updated" regardless of whether anything new was processed, so a
+        pipeline stuck on an old week looked identical to a healthy one.
+        """
+        weeks_added = weeks_added or []
+        if weeks_added:
+            headline = "✅ <b>SGX Fund Flow Dashboard Updated</b>"
+            change = f"🆕 {len(weeks_added)} new week(s): " + ", ".join(weeks_added)
+        else:
+            headline = "ℹ️ <b>SGX Fund Flow — No New Data</b>"
+            change = "🆕 No new weeks published since the last run."
+
+        msg = f"""{headline}
+
+📅 Latest week: {week_start}
+{change}
 📊 {total_weeks} weeks tracked · {ticker_count} tickers
 
 🔗 <a href="{DASHBOARD_URL}">View Dashboard</a>

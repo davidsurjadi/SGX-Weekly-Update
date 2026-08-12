@@ -28,7 +28,29 @@ from download_sgx_report import (
     is_already_downloaded,
     download_report,
     parse_week_from_filename,
+    find_missing_reports,
 )
+
+# If the newest week in the dataset is older than this, the run is treated as a
+# FAILURE even if every step "succeeded". Without this, a run that quietly
+# processes nothing still reports green — which is how the week of 3 Aug 2026
+# went unnoticed for over a week.
+STALENESS_LIMIT_DAYS = 10
+
+
+def newest_week_in_dataset(data_dir):
+    """Return the max week_start present in weekly_top10.csv, or None."""
+    import csv as _csv
+    path = Path(data_dir) / "weekly_top10.csv"
+    if not path.exists():
+        return None
+    newest = None
+    with open(path, newline="", encoding="utf-8") as fh:
+        for row in _csv.DictReader(fh):
+            w = (row.get("week_start") or "").strip()
+            if w and (newest is None or w > newest):
+                newest = w
+    return newest
 
 
 def run_command(cmd, cwd=None, env=None):
@@ -64,6 +86,7 @@ def main():
     week_start = None
     total_weeks = 0
     ticker_count = 0
+    weeks_downloaded = []
 
     try:
         # ============ STEP 1: Download ============
@@ -71,15 +94,20 @@ def main():
         print("STEP 1: Download SGX Report")
         print("=" * 60)
 
-        report_url, week_start = get_latest_report_url()
-        if not report_url:
-            raise Exception("Could not find latest SGX report URL")
+        week_before = newest_week_in_dataset(data_dir)
+        print(f"Newest week currently in dataset: {week_before or 'none'}")
 
-        if is_already_downloaded(week_start, str(raw_dir)):
-            print(f"Report for week {week_start} already downloaded. Skipping download.")
-        else:
-            if not download_report(report_url, week_start, str(raw_dir)):
-                raise Exception("Failed to download SGX report")
+        missing = find_missing_reports(str(raw_dir))
+        if not missing:
+            print("No missing weeks — archive is already in sync with the SGX API.")
+        for m_week, m_title, m_url in missing:
+            print(f"Downloading {m_title} (week of {m_week})...")
+            if not download_report(m_url, m_week, str(raw_dir)):
+                raise Exception(f"Failed to download SGX report for week {m_week}")
+            weeks_downloaded.append(m_week)
+
+        # week_start = newest week the API knows about, used for the commit message
+        week_start = max([m[0] for m in missing]) if missing else week_before
 
         # ============ STEP 2: Parse Reports ============
         print("\n" + "=" * 60)
@@ -97,6 +125,24 @@ def main():
         print(stdout)
         if rc != 0:
             raise Exception(f"parse_reports.py failed:\n{stderr}")
+
+        # ---- Staleness guard ----
+        # A run that processes nothing must not report success. Compare the
+        # newest week actually in the rebuilt dataset against today.
+        week_after = newest_week_in_dataset(data_dir)
+        print(f"Newest week after parse: {week_after or 'none'}")
+        if not week_after:
+            raise Exception("weekly_top10.csv has no week_start values after parsing")
+
+        age_days = (datetime.now() - datetime.strptime(week_after, "%Y-%m-%d")).days
+        print(f"Newest week is {age_days} days old (limit {STALENESS_LIMIT_DAYS}).")
+        if age_days > STALENESS_LIMIT_DAYS:
+            raise Exception(
+                f"STALE DATA: newest week is {week_after} ({age_days} days old). "
+                f"SGX may have changed its report list, or the download step is "
+                f"silently skipping weeks."
+            )
+        week_start = week_after
 
         # ============ STEP 3: Build Ticker Summary ============
         print("\n" + "=" * 60)
@@ -186,7 +232,8 @@ def main():
         print("SUCCESS: All steps completed")
         print("=" * 60)
 
-        notifier.send_success(week_start or "unknown", total_weeks, ticker_count)
+        notifier.send_success(week_start or "unknown", total_weeks, ticker_count,
+                              weeks_added=weeks_downloaded)
         return 0
 
     except Exception as e:

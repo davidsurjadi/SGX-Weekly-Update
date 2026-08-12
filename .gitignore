@@ -1,0 +1,11 @@
+# Google Drive Desktop Mirror sync folder — local publish target, not source.
+# Contains desktop.ini and .tmp.driveupload artefacts that must never be committed.
+Google Drive/
+
+# Local safety backups
+_backup_scripts_*/
+_synctest.txt
+
+# Python bytecode — was previously committed by mistake
+__pycache__/
+*.py[cod]
