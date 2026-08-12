@@ -144,6 +144,25 @@ def main():
             )
         week_start = week_after
 
+        # ============ STEP 2B: Refresh announcements (best-effort) ============
+        # Replaces the old browser-scraping of SGX's announcements page, which
+        # managed ~5 tickers/week and left coverage at 10%. This pulls all
+        # tickers from SGX's JSON API in one pass. Deliberately non-fatal: a
+        # flaky third-party fetch must not fail the whole weekly update.
+        print("\n" + "=" * 60)
+        print("STEP 2B: Refresh Announcements")
+        print("=" * 60)
+
+        env = os.environ.copy()
+        env['DATA_DIR'] = str(data_dir)
+        rc, stdout, stderr = run_command(
+            [sys.executable, str(SCRIPTS_DIR / "fetch_announcements.py")],
+            env=env
+        )
+        print(stdout)
+        if rc != 0:
+            print(f"WARNING: announcements refresh failed (continuing):\n{stderr[:400]}")
+
         # ============ STEP 3: Build Ticker Summary ============
         print("\n" + "=" * 60)
         print("STEP 3: Build Ticker Summary")
