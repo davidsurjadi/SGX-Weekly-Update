@@ -135,6 +135,57 @@ shareholder_rows = []
 if os.path.exists(shareholder_path):
     shareholder_rows = list(csv.DictReader(open(shareholder_path)))
 
+# --- Company announcements (all other SGXNet categories) ---
+# Capped per ticker: the dashboard shows the most recent few with a "show more"
+# control, so shipping every historical filing would bloat data.json for rows
+# nobody scrolls to. Newest first.
+ANNOUNCEMENTS_PER_TICKER = 40
+company_annc_path = os.path.join(DATA_DIR, "company_announcements.csv")
+company_annc_rows = []
+if os.path.exists(company_annc_path):
+    _all_annc = list(csv.DictReader(open(company_annc_path)))
+    _by_code = defaultdict(list)
+    for r in _all_annc:
+        # Titles arrive as "Category::Subject" — the prefix duplicates the
+        # category column, so keep only the subject for display.
+        title = (r.get("title") or "").strip()
+        if "::" in title:
+            title = title.split("::", 1)[1].strip()
+        _by_code[r["stock_code"]].append({
+            "stock_code": r["stock_code"],
+            "date": r.get("date", ""),
+            "category": (r.get("category") or "").strip(),
+            "title": title,
+            "url": r.get("url", ""),
+        })
+    for code, recs in _by_code.items():
+        recs.sort(key=lambda x: x["date"], reverse=True)
+        company_annc_rows.extend(recs[:ANNOUNCEMENTS_PER_TICKER])
+
+# --- Reported quarterly results (Yahoo structured financials, matched to the
+# SGX results filing that reported them) + forward analyst estimates.
+# Both are best-effort: Yahoo covers ~59% of tracked tickers for financials and
+# ~54% for estimates, so the dashboard must degrade gracefully when absent.
+results_path = os.path.join(DATA_DIR, "results_summaries.csv")
+results_rows = []
+if os.path.exists(results_path):
+    results_rows = list(csv.DictReader(open(results_path)))
+
+forecasts_path = os.path.join(DATA_DIR, "analyst_forecasts.csv")
+forecast_rows = []
+if os.path.exists(forecasts_path):
+    forecast_rows = list(csv.DictReader(open(forecasts_path)))
+
+# About a third of covered tickers report in something other than SGD, and a
+# forecast can exist for a ticker that has no recent reported quarter, so the
+# currency has to come from its own lookup rather than from the results row.
+currency_path = os.path.join(DATA_DIR, "reporting_currency.csv")
+reporting_currency = {}
+if os.path.exists(currency_path):
+    for r in csv.DictReader(open(currency_path)):
+        if r.get("stock_code") and r.get("currency"):
+            reporting_currency[r["stock_code"]] = r["currency"]
+
 # --- Rolling 4wk/12wk flow + price/flow signal classifier ---
 flow_by_ticker_side = defaultdict(dict)  # (code, side) -> {week: value_sgd_m}
 for r in rows:
@@ -255,6 +306,10 @@ out = {
     "signal_definitions": SIGNAL_DEFINITIONS,
     "short_sell": short_sell_rows,
     "shareholder_announcements": shareholder_rows,
+    "company_announcements": company_annc_rows,
+    "results_summaries": results_rows,
+    "analyst_forecasts": forecast_rows,
+    "reporting_currency": reporting_currency,
 }
 
 with open(os.path.join(DATA_DIR, "dashboard_data.json"), "w") as f:
@@ -263,4 +318,5 @@ with open(os.path.join(DATA_DIR, "dashboard_data.json"), "w") as f:
 print(f"weeks={len(weeks_sorted)} tickers={len(ticker_summary)} divergence_events={len(divergence_events)} "
       f"yahoo_price_rows={len(yahoo_price_rows)} shares_outstanding={len(shares_outstanding)} "
       f"signal_weeks={sum(len(v) for v in ticker_signals.values())} short_sell_rows={len(short_sell_rows)} "
-      f"shareholder_rows={len(shareholder_rows)}")
+      f"shareholder_rows={len(shareholder_rows)} company_announcements={len(company_annc_rows)} "
+      f"results_rows={len(results_rows)} forecast_rows={len(forecast_rows)}")
