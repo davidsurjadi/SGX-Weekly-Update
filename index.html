@@ -99,6 +99,14 @@ header.top .last-updated { font-size:11px; color: rgba(255,255,255,0.65); text-a
 .mini-list .item a { color:var(--accent); text-decoration:none; }
 .mini-list .item a:hover { text-decoration:underline; }
 .tag { display:inline-block; font-size:10.5px; padding:1px 7px; border-radius:8px; background:#eef0f3; color:var(--neutral); margin-left:6px; }
+.subtabs { display:flex; gap:4px; border-bottom:1px solid var(--border); margin:18px 0 14px; }
+.subtab-btn { background:none; border:none; border-bottom:2px solid transparent; padding:9px 16px; font-size:13px; font-weight:600; color:var(--text-secondary); cursor:pointer; }
+.subtab-btn:hover { color:var(--text-primary); }
+.subtab-btn.active { color:var(--accent); border-bottom-color:var(--accent); }
+.subtabpage { display:none; }
+.subtabpage.active { display:block; }
+.show-more-btn { background:none; border:1px solid var(--border); border-radius:6px; padding:6px 14px; font-size:12px; color:var(--accent); cursor:pointer; margin-top:10px; }
+.show-more-btn:hover { background:#f1f3f6; }
 .empty-state { color: var(--text-secondary); font-size:13px; padding: 40px; text-align:center; }
 .filter-label { font-size:10.5px; color:var(--text-secondary); font-weight:600; text-transform:uppercase; letter-spacing:.03em; margin-bottom:6px; }
 .chip-row { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
@@ -601,15 +609,116 @@ function selectTicker(code) {
   }
 
   const shHolder = (DATA.shareholder_announcements || []).filter(r => r.stock_code === code).sort((a,b)=> b.date.localeCompare(a.date));
+  const WEEK_ROWS = 15;
+  const DISC_ROWS = 10;
   let shareholderBlock = '';
   if (shHolder.length) {
+    const discRow = (r, hidden) => `<div class="item${hidden ? ' disc-extra' : ''}"${hidden ? ' style="display:none;"' : ''}><strong>${r.date}</strong> — <a href="${r.url}" target="_blank" rel="noopener">${r.title}</a><span class="tag">${r.notice_type}</span></div>`;
+    const discShown = shHolder.slice(0, DISC_ROWS).map(r => discRow(r, false)).join('');
+    const discRest = shHolder.slice(DISC_ROWS).map(r => discRow(r, true)).join('');
     shareholderBlock = `
     <div class="analysis-card">
       <h3>Recent Interest Disclosures (Directors / Substantial Shareholders)</h3>
-      <div class="mini-list">
-        ${shHolder.map(r => `<div class="item"><strong>${r.date}</strong> — <a href="${r.url}" target="_blank" rel="noopener">${r.title}</a><span class="tag">${r.notice_type}</span></div>`).join('')}
-      </div>
-      <div class="disclaimer" style="margin-top:10px;margin-bottom:0;">From SGX's Company Announcements (SGXNet), category "Disclosure of Interest/Changes in Interest" — confirms director dealings and substantial shareholder (5%+) stake changes. Coverage is being built out ticker-by-ticker over time; absence here doesn't mean no filings exist.</div>
+      <div class="mini-list">${discShown}${discRest}</div>
+      ${discRest ? `<button class="show-more-btn" id="disc-more" data-expanded="0">Show ${shHolder.length - DISC_ROWS} more</button>` : ''}
+      <div class="disclaimer" style="margin-top:10px;margin-bottom:0;">From SGX's Company Announcements (SGXNet), category "Disclosure of Interest/Changes in Interest" — confirms director dealings and substantial shareholder (5%+) stake changes. Showing the ${Math.min(shHolder.length, DISC_ROWS)} most recent of ${shHolder.length} on file for this ticker.</div>
+    </div>`;
+  }
+
+  // ---- Latest reported results + forward estimates ----
+  // Roughly a quarter of covered tickers report in a currency other than SGD
+  // (USD, CNY, MYR, IDR, THB, HKD), so the unit must come from the data.
+  const fmtCur = (v, cur) => {
+    const n = parseFloat(v);
+    if (!isFinite(n) || n === 0) return null;
+    const c = cur || '';
+    const abs = Math.abs(n);
+    if (abs >= 1e12) return c + ' ' + (n/1e12).toFixed(2) + 'tn';
+    if (abs >= 1e9) return c + ' ' + (n/1e9).toFixed(2) + 'bn';
+    if (abs >= 1e6) return c + ' ' + (n/1e6).toFixed(0) + 'm';
+    return c + ' ' + n.toLocaleString();
+  };
+  const tickerCurrency = (DATA.reporting_currency || {})[code] || '';
+  const pctSpan = (v, label) => {
+    const n = parseFloat(v);
+    if (!isFinite(n)) return '';
+    const cls = n >= 0 ? 'badge-buy' : 'badge-sell';
+    return `<span class="${cls}">${n>=0?'+':''}${n.toFixed(1)}%</span> <span style="color:var(--text-secondary);">${label}</span>`;
+  };
+  const myResults = (DATA.results_summaries || []).filter(r => r.stock_code === code)
+    .sort((a,b) => b.period_end.localeCompare(a.period_end));
+  const latestRes = myResults[0];
+  const myForecasts = (DATA.analyst_forecasts || []).filter(r => r.stock_code === code);
+  const fcCur = myForecasts.find(r => r.period === '0y');
+  const fcNext = myForecasts.find(r => r.period === '+1y');
+
+  let resultsBlock = '';
+  if (latestRes || fcCur || fcNext) {
+    let reported = '';
+    if (latestRes) {
+      const cur = latestRes.currency || tickerCurrency;
+      const rev = fmtCur(latestRes.revenue, cur), ni = fmtCur(latestRes.net_income, cur);
+      const cells = [];
+      if (rev) cells.push(`<div class="signal-box"><div class="label">Revenue</div><div class="val">${rev}</div><div style="font-size:11px;margin-top:2px;">${pctSpan(latestRes.revenue_qoq_pct,'vs prior qtr')}</div></div>`);
+      if (ni) cells.push(`<div class="signal-box"><div class="label">Net Profit</div><div class="val">${ni}</div><div style="font-size:11px;margin-top:2px;">${pctSpan(latestRes.net_income_qoq_pct,'vs prior qtr')}</div></div>`);
+      if (latestRes.eps_actual) {
+        const sp = parseFloat(latestRes.surprise_pct);
+        const spHtml = isFinite(sp)
+          ? `<div style="font-size:11px;margin-top:2px;"><span class="${sp>=0?'badge-buy':'badge-sell'}">${sp>=0?'+':''}${sp.toFixed(1)}%</span> <span style="color:var(--text-secondary);">vs ${parseFloat(latestRes.eps_estimate).toFixed(3)} est</span></div>`
+          : '';
+        cells.push(`<div class="signal-box"><div class="label">EPS (reported)</div><div class="val">${parseFloat(latestRes.eps_actual).toFixed(3)}</div>${spHtml}</div>`);
+      }
+      if (cells.length) {
+        const link = latestRes.announcement_url
+          ? ` · <a href="${latestRes.announcement_url}" target="_blank" rel="noopener">filing ${latestRes.announcement_date}</a>` : '';
+        // Yahoo's quarterly coverage for many SGX tickers lags badly, so say so
+        // rather than implying this is necessarily the newest published quarter.
+        const ageMonths = (Date.now() - new Date(latestRes.period_end + 'T00:00:00Z').getTime()) / (1000*60*60*24*30.44);
+        const staleNote = ageMonths > 12
+          ? `<div style="font-size:11px;color:#b45309;margin-bottom:8px;">This is the most recent quarter available from Yahoo Finance for this ticker — over a year old, so newer results have likely been filed. Check the announcements below.</div>`
+          : '';
+        reported = `<div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">Quarter ended ${latestRes.period_end}${link}</div>
+          ${staleNote}<div class="signal-grid">${cells.join('')}</div>`;
+      }
+    }
+    let forecastHtml = '';
+    const fcLine = (f, label) => {
+      if (!f) return '';
+      const bits = [];
+      const fcCur2 = (latestRes && latestRes.currency) || tickerCurrency;
+      if (f.eps_estimate) bits.push(`EPS ${parseFloat(f.eps_estimate).toFixed(3)}`);
+      if (f.revenue_estimate_m) bits.push(`revenue ${fmtCur(parseFloat(f.revenue_estimate_m)*1e6, fcCur2)}`);
+      if (!bits.length) return '';
+      return `<div class="item"><strong>${label}</strong> (FY to ${f.end_date}) — ${bits.join(' · ')} <span class="tag">${f.num_analysts} analysts</span></div>`;
+    };
+    const fcRows = fcLine(fcCur, 'Current year') + fcLine(fcNext, 'Next year');
+    if (fcRows) {
+      forecastHtml = `<div style="margin-top:14px;">
+        <div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;">Analyst consensus forecast</div>
+        <div class="mini-list">${fcRows}</div></div>`;
+    }
+    resultsBlock = `
+    <div class="analysis-card">
+      <h3>Latest Reported Results</h3>
+      ${reported}
+      ${forecastHtml}
+      <div class="disclaimer" style="margin-top:10px;margin-bottom:0;">Reported figures are the company's own results as filed with SGX (sourced via Yahoo Finance, spot-checked against the filing itself). Amounts are in each company's reporting currency, which is not always SGD. Comparisons are against the immediately preceding quarter, not the year-ago quarter — Yahoo only retains about five quarters, so true year-on-year isn't available here. Reported-results coverage is thin: only around 20 of the tracked tickers have reasonably current quarterly data, and blank fields mean Yahoo has no figure, not zero. Forecasts are analyst consensus estimates shown only where at least three analysts contribute — expectations, not outcomes, and frequently revised. Factual reference only, not a recommendation.</div>
+    </div>`;
+  }
+
+  const INITIAL_ROWS = 8;
+  const companyAnnc = (DATA.company_announcements || []).filter(r => r.stock_code === code).sort((a,b)=> b.date.localeCompare(a.date));
+  let announcementBlock = '';
+  if (companyAnnc.length) {
+    const rowHtml = (r, hidden) => `<div class="item${hidden ? ' annc-extra' : ''}"${hidden ? ' style="display:none;"' : ''}><strong>${r.date}</strong> — <a href="${r.url}" target="_blank" rel="noopener">${r.title || r.category}</a><span class="tag">${r.category}</span></div>`;
+    const shown = companyAnnc.slice(0, INITIAL_ROWS).map(r => rowHtml(r, false)).join('');
+    const rest = companyAnnc.slice(INITIAL_ROWS).map(r => rowHtml(r, true)).join('');
+    announcementBlock = `
+    <div class="analysis-card">
+      <h3>Company Announcements (SGXNet)</h3>
+      <div class="mini-list" id="annc-list">${shown}${rest}</div>
+      ${rest ? `<button class="show-more-btn" id="annc-more" data-expanded="0">Show ${companyAnnc.length - INITIAL_ROWS} more</button>` : ''}
+      <div class="disclaimer" style="margin-top:10px;margin-bottom:0;">All other SGXNet announcement categories — results, dividends, appointments, acquisitions, trading halts and general announcements. Routine share buy-back and employee-share-scheme filings are capped so they don't bury material news. Showing the most recent ${Math.min(companyAnnc.length, 40)} filings for this ticker.</div>
     </div>`;
   }
 
@@ -628,14 +737,18 @@ function selectTicker(code) {
     ${signalBlock}
     ${rollingBlock}
     ${shortSellBlock}
-    ${shareholderBlock}
+    <div class="subtabs">
+      <button class="subtab-btn active" data-subtab="price">Price &amp; flow</button>
+      <button class="subtab-btn" data-subtab="disclosures">Disclosures &amp; announcements</button>
+    </div>
+    <div class="subtabpage active" id="subtab-price">
     ${priceSection}
     <div style="font-size:11px;color:var(--text-secondary);margin-bottom:6px;">${hasPriceDataNote} Table and chart below reflect the current time-range filter (${cw.length} wks).</div>
     <canvas id="ticker-chart" style="max-height:260px; margin-bottom:16px;"></canvas>
     <table class="mini-table">
       <thead><tr><th>Week</th><th>Institutional</th><th>Retail</th><th>Fri Close</th><th>Wk Chg %</th><th>Total Wk Vol ('000)</th></tr></thead>
       <tbody>
-        ${weeksForTicker.map(w => {
+        ${weeksForTicker.map((w, i) => {
           const inst = history.find(h => h.week_start === w && h.side === 'institutional');
           const ret = history.find(h => h.week_start === w && h.side === 'retail');
           const pw = priceByWeek[w];
@@ -643,12 +756,62 @@ function selectTicker(code) {
           const volCell = pw ? Number(pw.volume).toLocaleString() : '<span style="color:#9aa3af;" title="No Yahoo Finance price data for this ticker/week">—</span>';
           const chg = weekChangePct(w);
           const chgCell = chg !== null ? `<span class="${chg>=0?'badge-buy':'badge-sell'}">${chg>=0?'+':''}${chg.toFixed(1)}%</span>` : '<span style="color:#9aa3af;">—</span>';
-          return `<tr><td>${w}</td><td>${sideCell(inst)}</td><td>${sideCell(ret)}</td><td>${priceCell}</td><td>${chgCell}</td><td>${volCell}</td></tr>`;
+          const hidden = i >= WEEK_ROWS;
+          return `<tr${hidden ? ' class="week-extra" style="display:none;"' : ''}><td>${w}</td><td>${sideCell(inst)}</td><td>${sideCell(ret)}</td><td>${priceCell}</td><td>${chgCell}</td><td>${volCell}</td></tr>`;
         }).join('')}
       </tbody>
     </table>
+    ${weeksForTicker.length > WEEK_ROWS ? `<button class="show-more-btn" id="week-more" data-expanded="0">Show ${weeksForTicker.length - WEEK_ROWS} more weeks</button>` : ''}
     <div style="font-size:11px;color:var(--text-secondary);margin-top:6px;">"~sh" figures are implied net shares, estimated as |S$M value| ÷ that week's Friday close — an approximation of net (buys minus sells), not exact broker-reported volume, and it will be off in weeks with large intra-week price swings.</div>
+    </div>
+    <div class="subtabpage" id="subtab-disclosures">
+      ${resultsBlock}
+      ${shareholderBlock}
+      ${announcementBlock}
+      ${(!resultsBlock && !shareholderBlock && !announcementBlock) ? '<div class="disclaimer">No SGX announcements on file for this ticker.</div>' : ''}
+    </div>
   `;
+
+  panel.querySelectorAll('.subtab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      panel.querySelectorAll('.subtab-btn').forEach(b => b.classList.remove('active'));
+      panel.querySelectorAll('.subtabpage').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      panel.querySelector('#subtab-' + btn.dataset.subtab).classList.add('active');
+    });
+  });
+
+  const weekMore = panel.querySelector('#week-more');
+  if (weekMore) {
+    weekMore.addEventListener('click', () => {
+      const expanded = weekMore.dataset.expanded === '1';
+      // '' restores the browser default (table-row) rather than forcing 'block',
+      // which would break the table layout.
+      panel.querySelectorAll('.week-extra').forEach(el => { el.style.display = expanded ? 'none' : ''; });
+      weekMore.dataset.expanded = expanded ? '0' : '1';
+      weekMore.textContent = expanded ? `Show ${weeksForTicker.length - WEEK_ROWS} more weeks` : 'Show fewer weeks';
+    });
+  }
+
+  const discMore = panel.querySelector('#disc-more');
+  if (discMore) {
+    discMore.addEventListener('click', () => {
+      const expanded = discMore.dataset.expanded === '1';
+      panel.querySelectorAll('.disc-extra').forEach(el => { el.style.display = expanded ? 'none' : ''; });
+      discMore.dataset.expanded = expanded ? '0' : '1';
+      discMore.textContent = expanded ? `Show ${shHolder.length - DISC_ROWS} more` : 'Show fewer';
+    });
+  }
+
+  const anncMore = panel.querySelector('#annc-more');
+  if (anncMore) {
+    anncMore.addEventListener('click', () => {
+      const expanded = anncMore.dataset.expanded === '1';
+      panel.querySelectorAll('.annc-extra').forEach(el => { el.style.display = expanded ? 'none' : ''; });
+      anncMore.dataset.expanded = expanded ? '0' : '1';
+      anncMore.textContent = expanded ? `Show ${companyAnnc.length - INITIAL_ROWS} more` : 'Show fewer';
+    });
+  }
 
   const instVals = cw.map(w => { const r = history.find(h=>h.week_start===w && h.side==='institutional'); return r ? parseFloat(r.value_sgd_m) : null; });
   const retailVals = cw.map(w => { const r = history.find(h=>h.week_start===w && h.side==='retail'); return r ? parseFloat(r.value_sgd_m) : null; });
