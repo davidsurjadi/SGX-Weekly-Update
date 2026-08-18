@@ -639,6 +639,26 @@ function selectTicker(code) {
     return c + ' ' + n.toLocaleString();
   };
   const tickerCurrency = (DATA.reporting_currency || {})[code] || '';
+
+  // Results and forecasts are refreshed by hand, not by the weekly bot. SGX
+  // results cluster in Feb, May, Jul-Aug and Nov (measured from this dataset's
+  // own filing history), so a pull is due in the month after each cluster.
+  const REFRESH_MONTHS = [2, 5, 8, 11]; // Mar, Jun, Sep, Dec (0-indexed)
+  const freshness = DATA.data_freshness || {};
+  function stalenessNote(dataset) {
+    const fetched = freshness[dataset];
+    if (!fetched) return {text: '', overdue: false};
+    const f = new Date(fetched + 'T00:00:00Z'), now = new Date();
+    // Overdue once a refresh month has started that began after the fetch date.
+    let overdue = false;
+    const probe = new Date(Date.UTC(f.getUTCFullYear(), f.getUTCMonth(), 1));
+    while (probe <= now) {
+      if (REFRESH_MONTHS.includes(probe.getUTCMonth()) &&
+          probe > f && probe <= now) { overdue = true; break; }
+      probe.setUTCMonth(probe.getUTCMonth() + 1);
+    }
+    return {text: fetched, overdue};
+  }
   const pctSpan = (v, label) => {
     const n = parseFloat(v);
     if (!isFinite(n)) return '';
@@ -697,11 +717,18 @@ function selectTicker(code) {
         <div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;">Analyst consensus forecast</div>
         <div class="mini-list">${fcRows}</div></div>`;
     }
+    const fresh = stalenessNote('results_summaries');
+    const freshLine = fresh.text ? `
+      <div style="font-size:11.5px;margin-top:10px;${fresh.overdue ? 'color:#a15c00;' : 'color:var(--text-secondary);'}">
+        ${fresh.overdue ? '<strong>Refresh due.</strong> ' : ''}Figures and forecasts fetched ${fresh.text}.
+        ${fresh.overdue ? 'An SGX reporting season has passed since — newer results are likely published but not yet loaded here.' : 'Next refresh due after the coming reporting season (Mar / Jun / Sep / Dec).'}
+      </div>` : '';
     resultsBlock = `
     <div class="analysis-card">
       <h3>Latest Reported Results</h3>
       ${reported}
       ${forecastHtml}
+      ${freshLine}
       <div class="disclaimer" style="margin-top:10px;margin-bottom:0;">Reported figures are the company's own results as filed with SGX (sourced via Yahoo Finance, spot-checked against the filing itself). Amounts are in each company's reporting currency, which is not always SGD. Comparisons are against the immediately preceding quarter, not the year-ago quarter — Yahoo only retains about five quarters, so true year-on-year isn't available here. Reported-results coverage is thin: only around 20 of the tracked tickers have reasonably current quarterly data, and blank fields mean Yahoo has no figure, not zero. Forecasts are analyst consensus estimates shown only where at least three analysts contribute — expectations, not outcomes, and frequently revised. Factual reference only, not a recommendation.</div>
     </div>`;
   }
