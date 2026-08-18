@@ -162,6 +162,34 @@ if os.path.exists(company_annc_path):
         recs.sort(key=lambda x: x["date"], reverse=True)
         company_annc_rows.extend(recs[:ANNOUNCEMENTS_PER_TICKER])
 
+# --- The Edge Singapore news headlines (third-party press coverage) ---
+# Distinct from SGXNet announcements above: those are the company's own filings,
+# these are journalism about the company. Capped per ticker and newest first,
+# for the same data.json size reason. Coverage is uneven by nature - large caps
+# are well covered, many small caps have no tag page at all.
+NEWS_PER_TICKER = 25
+edge_news_path = os.path.join(DATA_DIR, "edge_news.csv")
+edge_news_rows = []
+if os.path.exists(edge_news_path):
+    _all_news = list(csv.DictReader(open(edge_news_path, encoding="utf-8")))
+    _news_by_code = defaultdict(list)
+    for r in _all_news:
+        code = (r.get("stock_code") or "").strip()
+        headline = (r.get("headline") or "").strip()
+        if not code or not headline:
+            continue
+        _news_by_code[code].append({
+            "stock_code": code,
+            "date": (r.get("publish_date") or "").strip(),
+            "headline": headline,
+            "category": (r.get("category") or "").strip(),
+            "url": (r.get("url") or "").strip(),
+            "premium": (r.get("is_premium") or "0").strip() == "1",
+        })
+    for code, recs in _news_by_code.items():
+        recs.sort(key=lambda x: x["date"], reverse=True)
+        edge_news_rows.extend(recs[:NEWS_PER_TICKER])
+
 # --- Reported quarterly results (Yahoo structured financials, matched to the
 # SGX results filing that reported them) + forward analyst estimates.
 # Both are best-effort: Yahoo covers ~59% of tracked tickers for financials and
@@ -317,6 +345,7 @@ out = {
     "short_sell": short_sell_rows,
     "shareholder_announcements": shareholder_rows,
     "company_announcements": company_annc_rows,
+    "edge_news": edge_news_rows,
     "results_summaries": results_rows,
     "analyst_forecasts": forecast_rows,
     "reporting_currency": reporting_currency,
@@ -330,4 +359,5 @@ print(f"weeks={len(weeks_sorted)} tickers={len(ticker_summary)} divergence_event
       f"yahoo_price_rows={len(yahoo_price_rows)} shares_outstanding={len(shares_outstanding)} "
       f"signal_weeks={sum(len(v) for v in ticker_signals.values())} short_sell_rows={len(short_sell_rows)} "
       f"shareholder_rows={len(shareholder_rows)} company_announcements={len(company_annc_rows)} "
+      f"edge_news={len(edge_news_rows)} "
       f"results_rows={len(results_rows)} forecast_rows={len(forecast_rows)}")
