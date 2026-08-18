@@ -729,7 +729,16 @@ function selectTicker(code) {
       ${reported}
       ${forecastHtml}
       ${freshLine}
-      <div class="disclaimer" style="margin-top:10px;margin-bottom:0;">Reported figures are the company's own results as filed with SGX (sourced via Yahoo Finance, spot-checked against the filing itself). Amounts are in each company's reporting currency, which is not always SGD. Comparisons are against the immediately preceding quarter, not the year-ago quarter — Yahoo only retains about five quarters, so true year-on-year isn't available here. Reported-results coverage is thin: only around 20 of the tracked tickers have reasonably current quarterly data, and blank fields mean Yahoo has no figure, not zero. Forecasts are analyst consensus estimates shown only where at least three analysts contribute — expectations, not outcomes, and frequently revised. Factual reference only, not a recommendation.</div>
+      <div class="disclaimer" style="margin-top:10px;margin-bottom:0;" data-results-note>Reported figures are the company's own results as filed with SGX (sourced via Yahoo Finance, spot-checked against the filing itself). Amounts are in each company's reporting currency, which is not always SGD. Comparisons are against the immediately preceding quarter, not the year-ago quarter — Yahoo only retains about five quarters, so true year-on-year isn't available here. Reported-results coverage is thin: only around 20 of the tracked tickers have reasonably current quarterly data, and blank fields mean Yahoo has no figure, not zero. Forecasts are analyst consensus estimates shown only where at least three analysts contribute — expectations, not outcomes, and frequently revised. Factual reference only, not a recommendation.</div>
+    </div>`;
+  } else {
+    // Yahoo's coverage of smaller SGX listings is patchy. Say so explicitly
+    // rather than rendering nothing, which reads as a missing feature.
+    resultsBlock = `
+    <div class="analysis-card">
+      <h3>Latest Reported Results</h3>
+      <div style="font-size:13px;color:var(--text-secondary);">No reported figures or analyst forecasts are available for this ticker.</div>
+      <div class="disclaimer" style="margin-top:10px;margin-bottom:0;">This is a data-coverage gap, not a sign the company hasn't reported. Results and estimates come from Yahoo Finance, which covers only about 24 of the tracked tickers with current quarterly figures and skews heavily to the larger listings. The company's own filings with SGX are still listed under "Disclosures &amp; announcements" below.</div>
     </div>`;
   }
 
@@ -853,6 +862,7 @@ function selectTicker(code) {
     </div>
     <div class="disclaimer">Data-driven observation, not a recommendation: review alongside your own research before making any trading decision.</div>
     ${signalBlock}
+    ${resultsBlock}
     ${rollingBlock}
     ${shortSellBlock}
     <div class="subtabs">
@@ -884,10 +894,9 @@ function selectTicker(code) {
     </div>
     <div class="subtabpage" id="subtab-disclosures">
       ${digestBlock}
-      ${resultsBlock}
       ${shareholderBlock}
       ${announcementBlock}
-      ${(!digestBlock && !resultsBlock && !shareholderBlock && !announcementBlock) ? '<div class="disclaimer">No SGX announcements on file for this ticker.</div>' : ''}
+      ${(!digestBlock && !shareholderBlock && !announcementBlock) ? '<div class="disclaimer">No SGX announcements on file for this ticker.</div>' : ''}
     </div>
   `;
 
