@@ -179,6 +179,16 @@ if os.path.exists(forecasts_path):
 # About a third of covered tickers report in something other than SGD, and a
 # forecast can exist for a ticker that has no recent reported quarter, so the
 # currency has to come from its own lookup rather than from the results row.
+# When each manually-refreshed dataset was last pulled. The weekly bot rebuilds
+# data.json but never refreshes these sources, so the dashboard has to be able
+# to say how old they are rather than silently presenting stale figures.
+freshness_path = os.path.join(DATA_DIR, "data_freshness.csv")
+data_freshness = {}
+if os.path.exists(freshness_path):
+    for r in csv.DictReader(open(freshness_path)):
+        if r.get("dataset"):
+            data_freshness[r["dataset"]] = r.get("fetched_on", "")
+
 currency_path = os.path.join(DATA_DIR, "reporting_currency.csv")
 reporting_currency = {}
 if os.path.exists(currency_path):
@@ -310,6 +320,7 @@ out = {
     "results_summaries": results_rows,
     "analyst_forecasts": forecast_rows,
     "reporting_currency": reporting_currency,
+    "data_freshness": data_freshness,
 }
 
 with open(os.path.join(DATA_DIR, "dashboard_data.json"), "w") as f:
