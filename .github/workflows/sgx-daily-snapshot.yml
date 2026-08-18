@@ -14,10 +14,23 @@ name: SGX Daily Snapshot
 # Both fetch steps are append-only and independent - one failing never blocks
 # the other, and neither can destroy accumulated history.
 
+# SCHEDULE DISABLED - both sources currently block GitHub's runners.
+#
+# First run (2026-08-18) proved it: sginvestors.io returned HTTP 200 and the
+# table HEADERS parsed fine (the snapshot date 2026-08-17 was read correctly),
+# but ZERO data rows came through on both pages. theedgesingapore.com was worse
+# - all 138 tag requests errored outright, fast enough to look like an immediate
+# refusal rather than a timeout.
+#
+# The same requests work from a real browser on a residential connection, so
+# this is near-certainly datacenter-IP filtering, not a parsing bug. Leaving the
+# cron on would run this every weekday, change nothing, and report success -
+# worse than not running it at all.
+#
+# Kept as workflow_dispatch so the fix can be tested on demand. Re-enable the
+# cron line below once a run actually writes data.
 on:
-  schedule:
-    # 01:00 UTC = 09:00 SGT, Monday-Friday
-    - cron: '0 1 * * 1-5'
+  # - cron: '0 1 * * 1-5'   # 01:00 UTC = 09:00 SGT, Mon-Fri
   workflow_dispatch:
 
 permissions:
