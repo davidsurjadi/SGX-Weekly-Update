@@ -1,0 +1,90 @@
+name: SGX Quarterly Fundamentals Refresh
+
+# Refreshes the Yahoo Finance-sourced fundamentals (reported results, analyst
+# forecasts, reporting currency) that the weekly pipeline never touches.
+#
+# Timing: SGX results filings cluster in Feb, May, Jul-Aug and Nov (measured
+# from this repo's own company_announcements.csv), so this runs on the 1st of
+# March, June, September and December - just after each cluster.
+
+on:
+  schedule:
+    # 01:00 UTC = 09:00 SGT, 1st of Mar / Jun / Sep / Dec
+    - cron: '0 1 1 3,6,9,12 *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    name: Refresh Yahoo fundamentals and rebuild dashboard
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: 'requirements-ci.txt'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-ci.txt
+
+      # If Yahoo blocks this runner's IP the script exits non-zero WITHOUT
+      # touching the CSVs, so the job goes red and the existing data survives.
+      - name: Fetch Yahoo fundamentals
+        env:
+          DATA_DIR: data
+        run: python scripts/fetch_yahoo_fundamentals.py
+
+      - name: Rebuild dashboard
+        env:
+          DATA_DIR: data
+        run: |
+          python scripts/build_ticker_summary.py
+          DATA_DIR=data OUT_FILE="$GITHUB_WORKSPACE/sgx_fund_flow_dashboard.html" \
+            python scripts/render_dashboard.py
+          cp sgx_fund_flow_dashboard.html index.html
+
+      # Cheap insurance against publishing a truncated or broken page.
+      - name: Verify rendered output
+        run: |
+          python - <<'PY'
+          import re, sys, pathlib
+          html = pathlib.Path("index.html").read_text(encoding="utf-8")
+          assert html.rstrip().endswith("</html>"), "index.html is truncated"
+          scripts = re.findall(r"<script>([\s\S]*?)</script>", html)
+          assert scripts, "no inline script found"
+          assert "Latest Reported Results" in html, "results card missing from template"
+          print(f"index.html OK ({len(html)} bytes, {len(scripts)} inline script blocks)")
+          PY
+          node --input-type=module -e "
+            import fs from 'fs';
+            const h = fs.readFileSync('index.html','utf-8');
+            const s = [...h.matchAll(/<script>([\s\S]*?)<\/script>/g)];
+            new Function(s[s.length-1][1]);
+            console.log('inline JS parses OK');
+          "
+
+      - name: Commit and push
+        run: |
+          git config user.email "automation@sgx-update.local"
+          git config user.name "SGX Update Bot"
+          git add data/results_summaries.csv data/analyst_forecasts.csv \
+                  data/reporting_currency.csv data/data_freshness.csv \
+                  data/dashboard_data.json data.json index.html \
+                  sgx_fund_flow_dashboard.html
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Quarterly refresh: Yahoo fundamentals ($(date +%Y-%m-%d))"
+            git push origin HEAD:main
+            echo "Pushed."
+          fi
