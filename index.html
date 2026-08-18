@@ -707,7 +707,98 @@ function selectTicker(code) {
   }
 
   const INITIAL_ROWS = 8;
+  const ANNOUNCEMENTS_CAP = 40;
   const companyAnnc = (DATA.company_announcements || []).filter(r => r.stock_code === code).sort((a,b)=> b.date.localeCompare(a.date));
+
+  // ---- Plain-English digest of recent announcement activity ----
+  // Rule-based only: it counts and groups what was filed, it does not read the
+  // filings themselves. SGX titles are boilerplate ("Second Quarter Results"),
+  // so the honest claim is "this happened", never "this is what it said".
+  const ANNC_GROUPS = [
+    {label:'results filing',       test: c => /Financial Statements/i.test(c)},
+    {label:'dividend/distribution',test: c => /Dividend|Distribution|Scrip/i.test(c)},
+    {label:'board change',         test: c => /Appointment|Cessation/i.test(c)},
+    {label:'acquisition/disposal', test: c => /Asset Acquisitions|Takeover|Tender|Scheme of Arrangement/i.test(c)},
+    {label:'shareholder meeting',  test: c => /General Meeting|Court Meeting/i.test(c)},
+    {label:'annual report',        test: c => /Annual Report/i.test(c)},
+    {label:'buyback/share scheme', test: c => /Buy Back|Stock Option|Share Scheme|Share Purchase Mandate/i.test(c)},
+    {label:'capital raising',      test: c => /Placements|Rights|Bonus Issue|Capital Reduction|Capital Distribution/i.test(c)},
+  ];
+  // Items a reader would want surfaced rather than buried in a count.
+  const ANNC_MATERIAL = [
+    {label:'trading halt',          test: c => /Trading Halt|Request for Suspension/i.test(c)},
+    {label:'SGX query',             test: c => /Response to SGX Queries|Query Regarding Trading/i.test(c)},
+    {label:'SGX regulatory action', test: c => /Regulatory Actions/i.test(c)},
+    {label:'3 consecutive years of losses', test: c => /Consecutive Years' Losses/i.test(c)},
+    {label:'delisting',             test: c => /Delisting/i.test(c)},
+  ];
+
+  function buildDigest(days) {
+    const cutoff = new Date(Date.now() - days*86400000).toISOString().slice(0,10);
+    const recentAnnc = companyAnnc.filter(r => r.date >= cutoff);
+    const recentDisc = shHolder.filter(r => r.date >= cutoff);
+    if (!recentAnnc.length && !recentDisc.length) return null;
+
+    const counts = new Map();
+    const material = new Map();
+    let other = 0;
+    recentAnnc.forEach(r => {
+      const c = r.category || '';
+      const mat = ANNC_MATERIAL.find(m => m.test(c));
+      if (mat) { material.set(mat.label, (material.get(mat.label)||0) + 1); return; }
+      const g = ANNC_GROUPS.find(x => x.test(c));
+      if (g) counts.set(g.label, (counts.get(g.label)||0) + 1); else other++;
+    });
+
+    const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
+    const parts = [...counts.entries()].sort((a,b)=>b[1]-a[1]).map(([l,n]) => plural(n,l));
+    if (other) parts.push(plural(other,'general announcement'));
+
+    let discText = '';
+    if (recentDisc.length) {
+      const dir = recentDisc.filter(r => r.notice_type === 'director').length;
+      const sub = recentDisc.length - dir;
+      const bits = [];
+      if (dir) bits.push(plural(dir,'director'));
+      if (sub) bits.push(sub + ' substantial-shareholder');
+      discText = `${plural(recentDisc.length,'interest disclosure')} (${bits.join(', ')})`;
+    }
+
+    const matText = [...material.entries()].map(([l,n]) => n > 1 ? plural(n,l) : l).join(', ');
+    return {
+      total: recentAnnc.length + recentDisc.length,
+      parts, discText, matText,
+      // Only the 40 most recent filings per ticker are shipped. If every one of
+      // them falls inside the window, the true count is higher than shown.
+      capped: recentAnnc.length >= ANNOUNCEMENTS_CAP,
+      latest: [...recentAnnc, ...recentDisc].reduce((a,r)=> r.date > a ? r.date : a, ''),
+    };
+  }
+
+  // Fall back to a wider window for tickers that simply file rarely.
+  let digestDays = 90;
+  let digest = buildDigest(90);
+  if (!digest) { digestDays = 365; digest = buildDigest(365); }
+
+  let digestBlock = '';
+  if (digest) {
+    const sentence = [];
+    if (digest.parts.length) sentence.push(digest.parts.join(', '));
+    if (digest.discText) sentence.push(digest.discText);
+    const window = digestDays === 90 ? 'the last 90 days' : 'the last 12 months';
+    digestBlock = `
+    <div class="analysis-card" style="background:#eef6ff;border-color:#cfe4fb;">
+      <h3>What's Been Filed — ${window}</h3>
+      <div style="font-size:13px;">
+        <strong>${digest.capped ? 'At least ' : ''}${digest.total}</strong> filing${digest.total===1?'':'s'} in ${window}${sentence.length ? ': ' + sentence.join('; ') : ''}.
+        ${digest.capped ? '<div style="margin-top:4px;color:var(--text-secondary);">This ticker files often — only its 40 most recent filings are held here, and all of them fall inside this window, so the real total is higher.</div>' : ''}
+        ${digest.matText ? `<div style="margin-top:6px;color:#a15c00;"><strong>Worth a look:</strong> ${digest.matText}.</div>` : ''}
+        <div style="margin-top:6px;color:var(--text-secondary);">Most recent filing: ${digest.latest}.</div>
+      </div>
+      <div class="disclaimer" style="margin-top:10px;margin-bottom:0;">Counts of what was filed, grouped by SGX's own announcement category — this does not read the documents, so it tells you a dividend was declared, not how much. Open the filings below for the actual contents. Routine buy-back and share-scheme filings are capped in the underlying data, so their counts understate the true total.</div>
+    </div>`;
+  }
+
   let announcementBlock = '';
   if (companyAnnc.length) {
     const rowHtml = (r, hidden) => `<div class="item${hidden ? ' annc-extra' : ''}"${hidden ? ' style="display:none;"' : ''}><strong>${r.date}</strong> — <a href="${r.url}" target="_blank" rel="noopener">${r.title || r.category}</a><span class="tag">${r.category}</span></div>`;
@@ -765,10 +856,11 @@ function selectTicker(code) {
     <div style="font-size:11px;color:var(--text-secondary);margin-top:6px;">"~sh" figures are implied net shares, estimated as |S$M value| ÷ that week's Friday close — an approximation of net (buys minus sells), not exact broker-reported volume, and it will be off in weeks with large intra-week price swings.</div>
     </div>
     <div class="subtabpage" id="subtab-disclosures">
+      ${digestBlock}
       ${resultsBlock}
       ${shareholderBlock}
       ${announcementBlock}
-      ${(!resultsBlock && !shareholderBlock && !announcementBlock) ? '<div class="disclaimer">No SGX announcements on file for this ticker.</div>' : ''}
+      ${(!digestBlock && !resultsBlock && !shareholderBlock && !announcementBlock) ? '<div class="disclaimer">No SGX announcements on file for this ticker.</div>' : ''}
     </div>
   `;
 
