@@ -183,8 +183,14 @@ def main():
         raise RuntimeError(
             "every short-sell page failed - leaving short_sell.csv untouched")
     if not scraped:
-        log("Nothing parsed; existing data left untouched.")
-        return 0
+        # A 200 response whose table body is empty is NOT a quiet no-op: it
+        # means we were served a stripped page (datacenter-IP filtering) or the
+        # markup changed. Exiting 0 here once made a run report success while
+        # silently doing nothing, which is the worst possible outcome.
+        raise RuntimeError(
+            "pages fetched but zero rows parsed - the table body was missing. "
+            "Either the request was filtered or the page structure changed; "
+            "short_sell.csv left untouched.")
 
     existing = load_existing()
     have = {(r["stock_code"], r["snapshot_date"], r.get("source_list", ""))
