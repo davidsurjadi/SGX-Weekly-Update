@@ -163,6 +163,27 @@ def main():
         if rc != 0:
             print(f"WARNING: announcements refresh failed (continuing):\n{stderr[:400]}")
 
+        # ============ STEP 2C: Top up prices + shares (best-effort) ============
+        # yahoo_weekly_prices.csv drives the price/volume chart, the weekly
+        # % change column and the market-cap normalisation in the signals.
+        # It used to be refreshed only by a scheduled task on a laptop, so it
+        # froze whenever that machine was off. Append-only and idempotent, so
+        # a partial run is harmless - the next run fills the gap. Non-fatal:
+        # the fund-flow data is the primary product and must still publish.
+        print("\n" + "=" * 60)
+        print("STEP 2C: Top Up Weekly Prices and Shares Outstanding")
+        print("=" * 60)
+
+        env = os.environ.copy()
+        env['DATA_DIR'] = str(data_dir)
+        rc, stdout, stderr = run_command(
+            [sys.executable, str(SCRIPTS_DIR / "fetch_yahoo_prices.py")],
+            env=env
+        )
+        print(stdout)
+        if rc != 0:
+            print(f"WARNING: price top-up failed (continuing):\n{stderr[:400]}")
+
         # ============ STEP 3: Build Ticker Summary ============
         print("\n" + "=" * 60)
         print("STEP 3: Build Ticker Summary")
