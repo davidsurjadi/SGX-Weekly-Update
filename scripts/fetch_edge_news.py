@@ -55,10 +55,26 @@ OUT_PATH = DATA_DIR / "edge_news.csv"
 BASE = "https://www.theedgesingapore.com"
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+# All 138 tag requests failed on the first CI run, fast enough to look like an
+# immediate refusal. A bare requests call is trivially distinguishable from a
+# browser; this is the full Chrome header set, sent from a session that has
+# visited the homepage first.
 HEADERS = {
     "User-Agent": UA,
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "en-SG,en;q=0.9",
+    "Accept": ("text/html,application/xhtml+xml,application/xml;q=0.9,"
+               "image/avif,image/webp,image/apng,*/*;q=0.8"),
+    "Accept-Language": "en-SG,en-GB;q=0.9,en;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Sec-Ch-Ua": '"Chromium";v="120", "Not(A:Brand";v="24", "Google Chrome";v="120"',
+    "Sec-Ch-Ua-Mobile": "?0",
+    "Sec-Ch-Ua-Platform": '"Windows"',
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Upgrade-Insecure-Requests": "1",
+    "Connection": "keep-alive",
 }
 
 TIMEOUT = int(os.environ.get("EDGE_TIMEOUT", "30"))
@@ -121,26 +137,52 @@ def iso_date(raw):
     return ""
 
 
-def fetch_tag(session, slug):
-    """Returns (status, [articles]). status is 'ok' | 'missing' | 'error'."""
+def prime(session):
+    """
+    Visit the homepage first to pick up cookies and look like a real visit.
+    Best-effort; the tag fetches are attempted regardless.
+    """
     try:
-        r = session.get(f"{BASE}/tags/{slug}", timeout=TIMEOUT)
-    except requests.RequestException:
+        r = session.get(BASE + "/", timeout=TIMEOUT)
+        log(f"Primed session: HTTP {r.status_code}, "
+            f"{len(r.content)} bytes, {len(session.cookies)} cookies")
+    except requests.RequestException as e:
+        log(f"Priming failed ({e.__class__.__name__}); continuing anyway")
+
+
+def fetch_tag(session, slug, diag):
+    """
+    Returns (status, [articles]). status is 'ok' | 'missing' | 'error'.
+
+    `diag` is a counter dict recording WHY requests fail. The first run only
+    told us "errors 138", which was useless for diagnosis - a connection error,
+    a 403 and a page missing its data blob are three very different problems.
+    """
+    try:
+        r = session.get(f"{BASE}/tags/{slug}", timeout=TIMEOUT,
+                        headers={"Referer": BASE + "/",
+                                 "Sec-Fetch-Site": "same-origin"})
+    except requests.RequestException as e:
+        diag[f"exception:{e.__class__.__name__}"] = diag.get(
+            f"exception:{e.__class__.__name__}", 0) + 1
         return "error", []
     if r.status_code == 404:
         return "missing", []
     if r.status_code != 200:
+        diag[f"http:{r.status_code}"] = diag.get(f"http:{r.status_code}", 0) + 1
         return "error", []
 
     soup = BeautifulSoup(r.text, "html.parser")
     blob = soup.find("script", id="__NEXT_DATA__")
     if not blob or not blob.string:
+        diag["200_but_no_data_blob"] = diag.get("200_but_no_data_blob", 0) + 1
         return "error", []
     try:
         payload = json.loads(blob.string)
         data = payload["props"]["pageProps"]["data"]
         items = data.get("data") or []
     except (ValueError, KeyError, TypeError):
+        diag["blob_shape_changed"] = diag.get("blob_shape_changed", 0) + 1
         return "error", []
 
     articles = []
@@ -173,16 +215,25 @@ def main():
 
     session = requests.Session()
     session.headers.update(HEADERS)
+    prime(session)
 
     existing = load_existing()
     have = {(r["stock_code"], r["url"]) for r in existing}
     log(f"Existing news rows: {len(existing)}")
 
     fresh, ok, missing, errors = [], 0, [], 0
+    diag = {}
 
     for i, (code, name) in enumerate(sorted(tickers.items()), 1):
         slug = ALIASES.get(code) or slugify(name)
-        status, articles = fetch_tag(session, slug)
+        status, articles = fetch_tag(session, slug, diag)
+
+        # Bail out early if we are clearly being refused, rather than spending
+        # 90 seconds proving it 138 times over.
+        if i >= 8 and ok == 0 and not missing:
+            raise RuntimeError(
+                f"first {i} tag requests all failed - aborting rather than "
+                f"hammering the site. Failure breakdown: {diag}")
 
         if status == "missing":
             missing.append(f"{code} ({name}) -> /tags/{slug}")
@@ -203,6 +254,8 @@ def main():
         time.sleep(REQUEST_DELAY)
 
     log(f"Tags resolved {ok} | no tag page {len(missing)} | errors {errors}")
+    if diag:
+        log(f"Failure breakdown: {diag}")
 
     if ok < MIN_TAGS_OK:
         raise RuntimeError(

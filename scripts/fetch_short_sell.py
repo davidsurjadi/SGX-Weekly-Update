@@ -51,11 +51,30 @@ OUT_PATH = DATA_DIR / "short_sell.csv"
 
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+# The first CI run got HTTP 200 with the table body stripped out, which looks
+# like the request being judged non-human rather than the page changing. These
+# are the headers a real Chrome sends; a bare requests call sends almost none
+# of them, which is a very easy signal to filter on.
 HEADERS = {
     "User-Agent": UA,
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "en-SG,en;q=0.9",
+    "Accept": ("text/html,application/xhtml+xml,application/xml;q=0.9,"
+               "image/avif,image/webp,image/apng,*/*;q=0.8"),
+    "Accept-Language": "en-SG,en-GB;q=0.9,en;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Cache-Control": "max-age=0",
+    "Sec-Ch-Ua": '"Chromium";v="120", "Not(A:Brand";v="24", "Google Chrome";v="120"',
+    "Sec-Ch-Ua-Mobile": "?0",
+    "Sec-Ch-Ua-Platform": '"Windows"',
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Upgrade-Insecure-Requests": "1",
+    "Connection": "keep-alive",
 }
+
+HOME = "https://sginvestors.io/"
 
 SOURCES = [
     ("by_volume", "https://sginvestors.io/market/sgx-top-short-sell-by-volume"),
@@ -161,16 +180,35 @@ def load_existing():
         return [r for r in csv.DictReader(fh) if r.get("stock_code")]
 
 
+def prime(session):
+    """
+    Land on the homepage first so we arrive at the data pages with whatever
+    cookies the site hands out, and with a Referer, the way a person would.
+    Best-effort: if this fails we still try the data pages.
+    """
+    try:
+        r = session.get(HOME, timeout=TIMEOUT)
+        log(f"Primed session: HTTP {r.status_code}, "
+            f"{len(r.content)} bytes, {len(session.cookies)} cookies")
+    except requests.RequestException as e:
+        log(f"Priming failed ({e.__class__.__name__}); continuing anyway")
+
+
 def main():
     session = requests.Session()
     session.headers.update(HEADERS)
+    prime(session)
 
     scraped, failures = [], 0
     for source_list, url in SOURCES:
         try:
-            r = session.get(url, timeout=TIMEOUT)
+            r = session.get(url, timeout=TIMEOUT,
+                            headers={"Referer": HOME, "Sec-Fetch-Site": "same-origin"})
+            # Log the shape of every response. When this last failed we had a
+            # 200 and no rows, and only guesswork about why; size tells us
+            # whether we got a real page or a stub.
+            log(f"  {source_list}: HTTP {r.status_code}, {len(r.content)} bytes")
             if r.status_code != 200:
-                log(f"  {source_list}: HTTP {r.status_code}")
                 failures += 1
             else:
                 scraped.extend(parse_page(r.text, source_list))
