@@ -23,6 +23,10 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     name: Can headless Chromium read these sources from CI?
+    # The first attempt sat on "playwright install --with-deps" for 17 minutes
+    # and had to be cancelled by hand. A hung job must never burn minutes
+    # indefinitely again.
+    timeout-minutes: 12
 
     steps:
       - name: Set up Python 3.11
@@ -30,10 +34,13 @@ jobs:
         with:
           python-version: '3.11'
 
+      # No --with-deps: that runs apt-get, which is what hung. GitHub's
+      # ubuntu-latest image already ships the shared libraries Chromium needs.
       - name: Install Playwright
+        timeout-minutes: 5
         run: |
           pip install playwright
-          python -m playwright install --with-deps chromium
+          python -m playwright install chromium
 
       - name: Probe both sources
         run: |
@@ -54,8 +61,10 @@ jobs:
               # ---------- 1. sginvestors short-sell ----------
               url = "https://sginvestors.io/market/sgx-top-short-sell-by-volume"
               try:
-                  resp = page.goto(url, wait_until="networkidle", timeout=60000)
-                  page.wait_for_timeout(3000)
+                  # domcontentloaded, not networkidle: the page carries ad
+                  # scripts that may never let the network go quiet.
+                  resp = page.goto(url, wait_until="domcontentloaded", timeout=45000)
+                  page.wait_for_timeout(5000)
                   dom_rows = page.eval_on_selector_all("table tr", "els => els.length")
                   tickers = page.evaluate(
                       "() => (document.documentElement.outerHTML.match(/\\(SGX:[A-Z0-9]+\\)/g)||[]).length")
