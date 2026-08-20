@@ -849,6 +849,31 @@ function selectTicker(code) {
     </div>`;
   }
 
+  // --- Press coverage (The Edge Singapore) -------------------------------
+  // Kept visually distinct from SGXNet above: those are the company's own
+  // filings, these are journalism about it. Headlines and links only — no
+  // summarising — so nothing here is an interpretation of what was written.
+  const edgeNews = (DATA.edge_news || []).filter(r => r.stock_code === code)
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  let newsBlock = '';
+  if (edgeNews.length) {
+    const newsRow = (r, hidden) => {
+      const dateTxt = r.date || '—';
+      const cat = r.category ? `<span class="tag">${r.category}</span>` : '';
+      const lock = r.premium ? '<span class="tag" style="background:#f3e8d0;color:#8a6416;">paywalled</span>' : '';
+      return `<div class="item${hidden ? ' news-extra' : ''}"${hidden ? ' style="display:none;"' : ''}><strong>${dateTxt}</strong> — <a href="${r.url}" target="_blank" rel="noopener">${r.headline}</a>${cat}${lock}</div>`;
+    };
+    const shownN = edgeNews.slice(0, INITIAL_ROWS).map(r => newsRow(r, false)).join('');
+    const restN = edgeNews.slice(INITIAL_ROWS).map(r => newsRow(r, true)).join('');
+    newsBlock = `
+    <div class="analysis-card">
+      <h3>In the News (The Edge Singapore)</h3>
+      <div class="mini-list" id="news-list">${shownN}${restN}</div>
+      ${restN ? `<button class="show-more-btn" id="news-more" data-expanded="0">Show ${edgeNews.length - INITIAL_ROWS} more</button>` : ''}
+      <div class="disclaimer" style="margin-top:10px;margin-bottom:0;">Third-party press coverage, not company filings — headlines and links only, with no summary or interpretation applied. Articles are collected from the publisher's tag page for this company, which also lists pieces that merely mention it in passing, so the category label is shown to make that visible. Coverage is uneven: larger companies are covered heavily, many smaller ones not at all. Absence of headlines is not absence of news.</div>
+    </div>`;
+  }
+
   panel.innerHTML = `
     <div class="detail-header">
       <div><h2>${t.name}</h2><div class="code">${code} · first seen ${t.first_seen} · last seen ${t.last_seen}</div></div>
@@ -896,7 +921,8 @@ function selectTicker(code) {
       ${digestBlock}
       ${shareholderBlock}
       ${announcementBlock}
-      ${(!digestBlock && !shareholderBlock && !announcementBlock) ? '<div class="disclaimer">No SGX announcements on file for this ticker.</div>' : ''}
+      ${newsBlock}
+      ${(!digestBlock && !shareholderBlock && !announcementBlock && !newsBlock) ? '<div class="disclaimer">No SGX announcements or press coverage on file for this ticker.</div>' : ''}
     </div>
   `;
 
@@ -938,6 +964,16 @@ function selectTicker(code) {
       panel.querySelectorAll('.annc-extra').forEach(el => { el.style.display = expanded ? 'none' : ''; });
       anncMore.dataset.expanded = expanded ? '0' : '1';
       anncMore.textContent = expanded ? `Show ${companyAnnc.length - INITIAL_ROWS} more` : 'Show fewer';
+    });
+  }
+
+  const newsMore = panel.querySelector('#news-more');
+  if (newsMore) {
+    newsMore.addEventListener('click', () => {
+      const expanded = newsMore.dataset.expanded === '1';
+      panel.querySelectorAll('.news-extra').forEach(el => { el.style.display = expanded ? 'none' : ''; });
+      newsMore.dataset.expanded = expanded ? '0' : '1';
+      newsMore.textContent = expanded ? `Show ${edgeNews.length - INITIAL_ROWS} more` : 'Show fewer';
     });
   }
 
