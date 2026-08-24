@@ -3,7 +3,10 @@
 Refresh the Yahoo Finance-sourced fundamentals behind the SGX dashboard.
 
 Produces (in DATA_DIR):
-    results_summaries.csv   reported quarterly revenue / net income / EPS vs estimate
+    results_summaries.csv   reported revenue / net income / EPS vs estimate;
+                            quarterly rows where Yahoo has quarters, else the
+                            ticker's ANNUAL statements tagged period_type=annual
+                            (most SGX mid/small caps report half-yearly)
     analyst_forecasts.csv   forward consensus EPS + revenue (annual periods only)
     reporting_currency.csv  each ticker's reporting currency (often NOT SGD)
     data_freshness.csv      when the above were last fetched
@@ -183,13 +186,13 @@ def main():
     for i, code in enumerate(codes, 1):
         res, err = fetch_modules(
             session, crumb, code,
-            "incomeStatementHistoryQuarterly,earningsHistory,earningsTrend,financialData")
+            "incomeStatementHistoryQuarterly,incomeStatementHistory,earningsHistory,earningsTrend,financialData")
         if err == "EXPIRED":
             log("  crumb expired, renewing...")
             session, crumb = make_session()
             res, err = fetch_modules(
                 session, crumb, code,
-                "incomeStatementHistoryQuarterly,earningsHistory,earningsTrend,financialData")
+                "incomeStatementHistoryQuarterly,incomeStatementHistory,earningsHistory,earningsTrend,financialData")
         if err:
             log(f"  {code}: {err}")
             failed += 1
@@ -224,6 +227,7 @@ def main():
                           "ni": ni if ni else None})
         stmts.sort(key=lambda x: x["end"], reverse=True)
 
+        rows_before_quarters = len(results)
         for idx, q in enumerate(stmts):
             if q["end"] < OLDEST_QUARTER:
                 continue
@@ -237,6 +241,7 @@ def main():
             results.append({
                 "stock_code": code,
                 "period_end": q["end"],
+                "period_type": "quarterly",
                 "currency": cur or "",
                 "revenue": q["rev"] if q["rev"] is not None else "",
                 "net_income": q["ni"] if q["ni"] is not None else "",
@@ -248,6 +253,47 @@ def main():
                 "announcement_date": filing["date"] if filing else "",
                 "announcement_url": filing["url"] if filing else "",
             })
+
+        # Most SGX mid/small caps report half-yearly, so Yahoo carries no
+        # quarterly income statements for them -- which is why this feed covered
+        # only 24 of 138 tracked codes. For exactly those tickers, publish their
+        # ANNUAL statements instead, tagged period_type=annual so no consumer
+        # can mistake a year for a quarter. QoQ stays empty (a YoY figure in a
+        # "vs prior qtr" column would be a lie) and no surprise attaches: the
+        # earningsHistory surprises are quarterly measures.
+        if len(results) == rows_before_quarters:
+            annual = []
+            for st in (res.get("incomeStatementHistory") or {}).get(
+                    "incomeStatementHistory", []) or []:
+                end = (st.get("endDate") or {}).get("fmt")
+                if not end or end < OLDEST_QUARTER:
+                    continue
+                rev_a, ni_a = raw(st, "totalRevenue"), raw(st, "netIncome")
+                # Yahoo emits 0 where it has no figure; treat that as missing.
+                if not rev_a and not ni_a:
+                    continue
+                annual.append({"end": end,
+                               "rev": rev_a if rev_a else None,
+                               "ni": ni_a if ni_a else None})
+            annual.sort(key=lambda x: x["end"], reverse=True)
+            for y in annual:
+                filing = next((x for x in annc.get(code, [])
+                               if x["date"] >= y["end"]), None)
+                results.append({
+                    "stock_code": code,
+                    "period_end": y["end"],
+                    "period_type": "annual",
+                    "currency": cur or "",
+                    "revenue": y["rev"] if y["rev"] is not None else "",
+                    "net_income": y["ni"] if y["ni"] is not None else "",
+                    "revenue_qoq_pct": "",
+                    "net_income_qoq_pct": "",
+                    "eps_actual": "",
+                    "eps_estimate": "",
+                    "surprise_pct": "",
+                    "announcement_date": filing["date"] if filing else "",
+                    "announcement_url": filing["url"] if filing else "",
+                })
 
         # Forward consensus - annual periods only, and only a real consensus
         for t in (res.get("earningsTrend") or {}).get("trend", []) or []:
@@ -293,7 +339,7 @@ def main():
         log(f"  wrote {name} ({len(rows)} rows)")
 
     write("results_summaries.csv", results,
-          ["stock_code", "period_end", "currency", "revenue", "net_income",
+          ["stock_code", "period_end", "period_type", "currency", "revenue", "net_income",
            "revenue_qoq_pct", "net_income_qoq_pct", "eps_actual", "eps_estimate",
            "surprise_pct", "announcement_date", "announcement_url"])
     write("analyst_forecasts.csv", forecasts,

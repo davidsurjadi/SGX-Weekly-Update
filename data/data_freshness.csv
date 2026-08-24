@@ -1,4 +1,4 @@
 dataset,fetched_on,source,refresh_note
-results_summaries,2026-08-18,Yahoo Finance quarterly income statements,Refresh after each SGX reporting season (Mar / Jun / Sep / Dec)
-analyst_forecasts,2026-08-18,Yahoo Finance analyst estimates,Estimates are revised continuously; refresh alongside results
-reporting_currency,2026-08-18,Yahoo Finance financialData,Rarely changes; refresh only if a ticker's figures look mis-scaled
+results_summaries,2026-08-24,Yahoo Finance quarterly income statements,Refresh after each SGX reporting season (Mar / Jun / Sep / Dec)
+analyst_forecasts,2026-08-24,Yahoo Finance analyst estimates,Estimates are revised continuously; refresh alongside results
+reporting_currency,2026-08-24,Yahoo Finance financialData,Rarely changes; refresh only if a ticker's figures look mis-scaled
