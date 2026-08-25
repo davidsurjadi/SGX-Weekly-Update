@@ -697,7 +697,7 @@ function selectTicker(code) {
         const staleNote = ageMonths > 12
           ? `<div style="font-size:11px;color:#b45309;margin-bottom:8px;">This is the most recent quarter available from Yahoo Finance for this ticker — over a year old, so newer results have likely been filed. Check the announcements below.</div>`
           : '';
-        reported = `<div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">${latestRes.period_type === 'annual' ? 'Year' : 'Quarter'} ended ${latestRes.period_end}${link}</div>
+        reported = `<div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">Quarter ended ${latestRes.period_end}${link}</div>
           ${staleNote}<div class="signal-grid">${cells.join('')}</div>`;
       }
     }
