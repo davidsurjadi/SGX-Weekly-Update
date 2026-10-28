@@ -31,7 +31,17 @@ def parse_week_from_filename(filename):
     """Extract week_start date from a name like 'SGX Fund Flow Weekly Tracker
     (Week of 27 July 2026)' or the abbreviated form '(Week of 27 Jul 2026)' —
     SGX's API returns titles with the abbreviated month, downloaded filenames
-    use the full month, so both must parse."""
+    use the full month, so both must parse. Files saved by download_report()
+    carry an ISO date, '(Week of 2026-10-19)', which must parse too: if it
+    does not, those files never count as archived and are re-downloaded on
+    every run."""
+    iso = re.search(r'Week of (\d{4})-(\d{2})-(\d{2})', filename)
+    if iso:
+        try:
+            dt = datetime(int(iso.group(1)), int(iso.group(2)), int(iso.group(3)))
+        except ValueError:
+            return None
+        return (dt - timedelta(days=dt.weekday())).strftime('%Y-%m-%d')
     match = re.search(r'Week of (\d{1,2}) (\w+) (\d{4})', filename)
     if not match:
         return None
