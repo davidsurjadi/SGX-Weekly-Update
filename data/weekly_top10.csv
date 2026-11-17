@@ -6879,3 +6879,83 @@ week_start,report_week,side,direction,rank,stock_name,stock_code,value_sgd_m
 2026-10-26,26 October 2026,retail,sell,8,Yangzijiang Maritime,8YZ,-3.429396
 2026-10-26,26 October 2026,retail,sell,9,Yangzijiang Financial,YF8,-3.3525103
 2026-10-26,26 October 2026,retail,sell,10,SATS,S58,-3.338577
+2026-11-02,2 November 2026,institutional,buy,1,Jardine Matheson,J36,50.98293955198
+2026-11-02,2 November 2026,institutional,buy,2,CapitaLand Ascendas REIT,A17U,46.439267
+2026-11-02,2 November 2026,institutional,buy,3,SIA,C6L,36.833393
+2026-11-02,2 November 2026,institutional,buy,4,Genting Singapore,G13,14.4471575
+2026-11-02,2 November 2026,institutional,buy,5,Yangzijiang Shipbuilding,BS6,14.012048
+2026-11-02,2 November 2026,institutional,buy,6,CapitaLand Integrated Commercial Trust,C38U,13.078551
+2026-11-02,2 November 2026,institutional,buy,7,SATS,S58,12.525182
+2026-11-02,2 November 2026,institutional,buy,8,SGX,S68,10.1406775
+2026-11-02,2 November 2026,institutional,buy,9,Keppel DC REIT,AJBU,9.886003
+2026-11-02,2 November 2026,institutional,buy,10,UI Boustead REIT,UIBU,9.811509
+2026-11-02,2 November 2026,institutional,sell,1,DBS,D05,-63.42498250000001
+2026-11-02,2 November 2026,institutional,sell,2,Wilmar International,F34,-34.044972
+2026-11-02,2 November 2026,institutional,sell,3,Keppel,BN4,-28.8467998
+2026-11-02,2 November 2026,institutional,sell,4,AEM,AWX,-27.056903
+2026-11-02,2 November 2026,institutional,sell,5,OCBC,O39,-24.7417768
+2026-11-02,2 November 2026,institutional,sell,6,First Resources,EB5,-22.315633
+2026-11-02,2 November 2026,institutional,sell,7,ST Engineering,S63,-21.783684
+2026-11-02,2 November 2026,institutional,sell,8,Sheng Siong,OV8,-17.418279
+2026-11-02,2 November 2026,institutional,sell,9,Venture Corporation,V03,-13.046813
+2026-11-02,2 November 2026,institutional,sell,10,CSE Global,544,-10.8641225
+2026-11-02,2 November 2026,retail,buy,1,DBS,D05,168.893291
+2026-11-02,2 November 2026,retail,buy,2,UOB,U11,139.5958922
+2026-11-02,2 November 2026,retail,buy,3,OCBC,O39,77.0088152
+2026-11-02,2 November 2026,retail,buy,4,Keppel,BN4,36.26974370000001
+2026-11-02,2 November 2026,retail,buy,5,Yangzijiang Shipbuilding,BS6,34.688148
+2026-11-02,2 November 2026,retail,buy,6,AEM,AWX,32.698756
+2026-11-02,2 November 2026,retail,buy,7,ST Engineering,S63,27.460671
+2026-11-02,2 November 2026,retail,buy,8,Sheng Siong,OV8,22.345505
+2026-11-02,2 November 2026,retail,buy,9,Wilmar International,F34,18.281111
+2026-11-02,2 November 2026,retail,buy,10,UMS,558,11.899384
+2026-11-02,2 November 2026,retail,sell,1,SIA,C6L,-44.667433
+2026-11-02,2 November 2026,retail,sell,2,Genting Singapore,G13,-15.7802215
+2026-11-02,2 November 2026,retail,sell,3,SGX,S68,-14.5947937
+2026-11-02,2 November 2026,retail,sell,4,CapitaLand Integrated Commercial Trust,C38U,-11.001186
+2026-11-02,2 November 2026,retail,sell,5,ComfortDelGro,C52,-8.627127
+2026-11-02,2 November 2026,retail,sell,6,Hongkong Land,H78,-8.624539672100001
+2026-11-02,2 November 2026,retail,sell,7,UI Boustead REIT,UIBU,-7.47107
+2026-11-02,2 November 2026,retail,sell,8,Keppel DC REIT,AJBU,-7.021605
+2026-11-02,2 November 2026,retail,sell,9,City Developments,C09,-6.16246
+2026-11-02,2 November 2026,retail,sell,10,Jardine Matheson,J36,-5.584045000090001
+2026-11-09,9 November 2026,institutional,buy,1,SIA,C6L,58.883757
+2026-11-09,9 November 2026,institutional,buy,2,SATS,S58,41.93934
+2026-11-09,9 November 2026,institutional,buy,3,OCBC,O39,26.3632183
+2026-11-09,9 November 2026,institutional,buy,4,ST Engineering,S63,20.978576
+2026-11-09,9 November 2026,institutional,buy,5,AEM,AWX,20.686198
+2026-11-09,9 November 2026,institutional,buy,6,CapitaLand Investment,9CI,9.990908
+2026-11-09,9 November 2026,institutional,buy,7,First Resources,EB5,6.485778
+2026-11-09,9 November 2026,institutional,buy,8,Singtel,Z74,4.816621000000001
+2026-11-09,9 November 2026,institutional,buy,9,Jardine Cycle & Carriage,C07,4.613473399999999
+2026-11-09,9 November 2026,institutional,buy,10,Frasers Centrepoint Trust,J69U,3.914432
+2026-11-09,9 November 2026,institutional,sell,1,DBS,D05,-118.8014205
+2026-11-09,9 November 2026,institutional,sell,2,Wilmar International,F34,-17.141441
+2026-11-09,9 November 2026,institutional,sell,3,City Developments,C09,-16.455028
+2026-11-09,9 November 2026,institutional,sell,4,CapitaLand Integrated Commercial Trust,C38U,-13.834744
+2026-11-09,9 November 2026,institutional,sell,5,Sheng Siong,OV8,-11.952231
+2026-11-09,9 November 2026,institutional,sell,6,SGX,S68,-10.477078
+2026-11-09,9 November 2026,institutional,sell,7,Keppel,BN4,-10.3179434
+2026-11-09,9 November 2026,institutional,sell,8,Genting Singapore,G13,-8.3263835
+2026-11-09,9 November 2026,institutional,sell,9,Netlink NBN Trust,CJLU,-5.755178
+2026-11-09,9 November 2026,institutional,sell,10,Hongkong Land,H78,-4.715146431200001
+2026-11-09,9 November 2026,retail,buy,1,DBS,D05,144.0674402
+2026-11-09,9 November 2026,retail,buy,2,Yangzijiang Shipbuilding,BS6,47.226146
+2026-11-09,9 November 2026,retail,buy,3,Singtel,Z74,27.561265
+2026-11-09,9 November 2026,retail,buy,4,City Developments,C09,20.882839
+2026-11-09,9 November 2026,retail,buy,5,Genting Singapore,G13,16.4340465
+2026-11-09,9 November 2026,retail,buy,6,Wilmar International,F34,13.564054
+2026-11-09,9 November 2026,retail,buy,7,Frasers Logistics & Commercial Trust,BUOU,7.046397
+2026-11-09,9 November 2026,retail,buy,8,Sheng Siong,OV8,6.654
+2026-11-09,9 November 2026,retail,buy,9,UMS,558,6.437385
+2026-11-09,9 November 2026,retail,buy,10,Netlink NBN Trust,CJLU,6.109553
+2026-11-09,9 November 2026,retail,sell,1,SIA,C6L,-67.32611
+2026-11-09,9 November 2026,retail,sell,2,SATS,S58,-33.292574
+2026-11-09,9 November 2026,retail,sell,3,AEM,AWX,-11.524644
+2026-11-09,9 November 2026,retail,sell,4,Keppel,BN4,-9.4913365
+2026-11-09,9 November 2026,retail,sell,5,ComfortDelGro,C52,-3.571101
+2026-11-09,9 November 2026,retail,sell,6,iFast Corporation,AIY,-3.24137
+2026-11-09,9 November 2026,retail,sell,7,SGX,S68,-2.8378635
+2026-11-09,9 November 2026,retail,sell,8,Great Eastern,G07,-2.2885733
+2026-11-09,9 November 2026,retail,sell,9,Jardine Cycle & Carriage,C07,-1.7535331
+2026-11-09,9 November 2026,retail,sell,10,Top Glove,BVA,-1.7404425
